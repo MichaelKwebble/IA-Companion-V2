@@ -1,0 +1,49 @@
+.lecture-dashboard {
+    padding: var(--space-xl);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.dashboard-header {
+    margin-bottom: var(--space-xl);
+}
+
+.dashboard-header h1 {
+    margin: 0 0 var(--space-xs) 0;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.dashboard-subtitle {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
+}
+
+.classes-section {
+    margin-top: var(--space-xl);
+}
+
+.classes-section h2 {
+    margin: 0 0 var(--space-lg) 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.classes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--space-lg);
+}
+
+@media (max-width: 768px) {
+    .lecture-dashboard {
+        padding: var(--space-md);
+    }
+
+    .classes-grid {
+        grid-template-columns: 1fr;
+    }
+}

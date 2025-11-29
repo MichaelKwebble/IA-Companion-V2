@@ -1,0 +1,60 @@
+.layer-manager {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: white;
+    font-size: 12px;
+}
+
+.layer-header {
+    padding: 12px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.layer-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.layer-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+}
+
+.layer-row:hover {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.layer-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+}
+
+.layer-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.layer-actions {
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+}
+
+.layer-row:hover .layer-actions {
+    opacity: 1;
+}
+
+.action-icon {
+    cursor: pointer;
+}

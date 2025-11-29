@@ -1,0 +1,69 @@
+.lesson-toolbar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 24px;
+}
+
+.lesson-toolbar-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 100%;
+}
+
+.lesson-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.lesson-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+}
+
+.lesson-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-check-code,
+.btn-back-to-lesson {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn-check-code {
+    background: rgba(255, 255, 255, 0.95);
+    color: #667eea;
+}
+
+.btn-check-code:hover {
+    background: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-back-to-lesson {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-back-to-lesson:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+}

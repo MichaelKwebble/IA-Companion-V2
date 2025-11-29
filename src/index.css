@@ -1,0 +1,89 @@
+@import './styles/variables.css';
+
+/* Utility Classes (Minimal set for layout) */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.h-full {
+  height: 100%;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.p-md {
+  padding: var(--space-md);
+}
+
+.gap-sm {
+  gap: var(--space-sm);
+}
+
+.gap-md {
+  gap: var(--space-md);
+}
+
+/* Typography Utilities */
+.text-sm {
+  font-size: var(--font-size-sm);
+}
+
+.text-md {
+  font-size: var(--font-size-md);
+}
+
+.font-bold {
+  font-weight: 600;
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+/* Component Base Styles */
+button {
+  font-family: inherit;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.panel {
+  background-color: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}

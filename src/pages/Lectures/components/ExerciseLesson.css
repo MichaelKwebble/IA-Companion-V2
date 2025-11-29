@@ -1,0 +1,91 @@
+.exercise-lesson {
+    padding: var(--space-xl);
+}
+
+.exercise-header {
+    margin-bottom: var(--space-xl);
+}
+
+.exercise-type-badge {
+    display: inline-block;
+    background: var(--color-primary);
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin-bottom: var(--space-md);
+}
+
+.exercise-header h1 {
+    margin: 0 0 var(--space-md) 0;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.exercise-description {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.exercise-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    max-width: 800px;
+}
+
+.exercise-info-card {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+}
+
+.exercise-info-card h3 {
+    margin: 0 0 var(--space-md) 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.exercise-info-card p {
+    margin: 0;
+    font-size: var(--font-size-md);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.exercise-info-card ul {
+    margin: 0;
+    padding-left: var(--space-lg);
+    color: var(--color-text-secondary);
+}
+
+.exercise-info-card li {
+    margin-bottom: var(--space-sm);
+    line-height: 1.6;
+}
+
+.btn-start-exercise {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-success));
+    color: white;
+    padding: 16px 32px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-md);
+    margin-top: var(--space-md);
+    align-self: flex-start;
+}
+
+.btn-start-exercise:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}

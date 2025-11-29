@@ -1,0 +1,104 @@
+.video-lesson {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+.video-container {
+    background: #000;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.video-player {
+    width: 100%;
+    display: block;
+    max-height: 600px;
+}
+
+.lesson-details {
+    padding: 0 var(--space-lg);
+}
+
+.lesson-details h1 {
+    margin: 0 0 var(--space-md) 0;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.lesson-description {
+    margin: 0 0 var(--space-xl) 0;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.resources-section {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--color-border);
+}
+
+.resources-section h3 {
+    margin: 0 0 var(--space-md) 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.resources-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.resource-item:hover {
+    border-color: var(--color-primary);
+    background: var(--color-bg-hover);
+    transform: translateX(4px);
+}
+
+.resource-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.resource-info {
+    flex: 1;
+}
+
+.resource-name {
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 2px;
+}
+
+.resource-size {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+}
+
+.download-icon {
+    font-size: 18px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.resource-item:hover .download-icon {
+    opacity: 1;
+}

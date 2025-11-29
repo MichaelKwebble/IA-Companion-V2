@@ -1,0 +1,68 @@
+.file-explorer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--color-bg-panel);
+}
+
+.explorer-header {
+    padding: 8px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.explorer-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.explorer-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+    font-size: var(--font-size-sm);
+    border: none;
+    background: transparent;
+}
+
+.explorer-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.file-icon {
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.file-icon-type {
+    display: flex;
+    align-items: center;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+/* Folder icons should be blue */
+.explorer-item svg[class*="lucide-folder"] {
+    color: var(--color-primary);
+}
+
+.file-name {
+    flex: 1;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

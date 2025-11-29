@@ -1,0 +1,79 @@
+:root {
+  /* Figma-like White Theme Palette */
+  --color-bg-app: #F5F5F5;
+  --color-bg-panel: #FFFFFF;
+  --color-bg-hover: #F0F0F0;
+  --color-bg-active: #E8E8E8;
+  --color-bg-selected: #E6F7FF; /* Subtle blue selection */
+  
+  --color-border: #E5E5E5;
+  --color-border-strong: #D4D4D4;
+  
+  --color-text-primary: #333333;
+  --color-text-secondary: #757575;
+  --color-text-disabled: #BDBDBD;
+  
+  --color-primary: #18A0FB; /* Figma Blue */
+  --color-primary-hover: #0D8DE3;
+  
+  --color-success: #1BC47D;
+  --color-warning: #F2994A;
+  --color-error: #EB5757;
+  
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.05);
+  
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+body {
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D1D1D1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B0B0B0;
+}

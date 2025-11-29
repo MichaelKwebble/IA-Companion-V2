@@ -1,0 +1,98 @@
+.project-tabs-bar {
+    height: 36px;
+    background-color: #F3F3F3;
+    /* Light grey background for the tab bar */
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--color-border);
+    -webkit-app-region: drag;
+    /* Allow dragging window on mac */
+}
+
+.tabs-list {
+    display: flex;
+    height: 100%;
+    align-items: flex-end;
+    gap: 2px;
+    -webkit-app-region: no-drag;
+}
+
+.project-tab {
+    height: 32px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: transparent;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    transition: background-color 0.1s;
+    max-width: 200px;
+    min-width: 120px;
+}
+
+.project-tab:hover {
+    background-color: #E5E5E5;
+}
+
+.project-tab.active {
+    background-color: white;
+    color: var(--color-text-primary);
+    font-weight: 500;
+    height: 36px;
+    /* Connect with toolbar below */
+    border-bottom: 1px solid white;
+    /* Hide border */
+    margin-bottom: -1px;
+    z-index: 1;
+}
+
+.tab-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tab-close {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: transparent;
+    /* Hidden by default */
+    transition: all 0.1s;
+}
+
+.project-tab:hover .tab-close,
+.project-tab.active .tab-close {
+    color: #969696;
+    /* Grey color */
+}
+
+.tab-close:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: #505050;
+}
+
+.new-tab-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    -webkit-app-region: no-drag;
+    margin-left: 4px;
+}
+
+.new-tab-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+}
