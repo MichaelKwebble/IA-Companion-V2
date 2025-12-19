@@ -1,0 +1,14 @@
+{
+    "name": "ia-companion-server",
+    "version": "1.0.0",
+    "description": "Device detection server for ESP32-S3 boards",
+    "main": "server.js",
+    "type": "module",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "cors": "^2.8.5"
+    }
+}

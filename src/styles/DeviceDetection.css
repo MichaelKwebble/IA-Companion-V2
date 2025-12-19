@@ -1,0 +1,224 @@
+.device-detection-container {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.device-detection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.device-detection-header h2 {
+    color: white;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.refresh-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.refresh-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.device-error {
+    background: rgba(255, 59, 48, 0.1);
+    border: 1px solid rgba(255, 59, 48, 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.error-icon {
+    font-size: 1.5rem;
+}
+
+.error-hint {
+    font-size: 0.875rem;
+    opacity: 0.8;
+    margin: 0;
+}
+
+.device-status {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+.status-indicator {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.status-indicator.connected {
+    color: #4ade80;
+}
+
+.status-indicator.disconnected {
+    color: #94a3b8;
+}
+
+.device-count {
+    font-weight: 500;
+}
+
+.last-update {
+    margin-left: auto;
+    font-size: 0.875rem;
+    opacity: 0.8;
+}
+
+.no-devices {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    text-align: center;
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+.no-devices-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.no-devices h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+}
+
+.no-devices p {
+    opacity: 0.8;
+    margin-bottom: 1.5rem;
+}
+
+.detection-info {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    max-width: 400px;
+    margin: 0 auto;
+    text-align: left;
+}
+
+.detection-info p {
+    margin: 0 0 0.5rem 0;
+    font-weight: 600;
+}
+
+.detection-info ul {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.detection-info li {
+    opacity: 0.9;
+    margin-bottom: 0.25rem;
+}
+
+.device-list {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+}
+
+.device-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 1.25rem;
+    color: white;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.device-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.device-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.device-number {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.device-status-badge {
+    background: #4ade80;
+    color: #064e3b;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.device-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.device-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.detail-label {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.detail-value {
+    font-family: 'Monaco', 'Menlo', monospace;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.detail-value.serial {
+    font-weight: 600;
+    color: #4ade80;
+}
