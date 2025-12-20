@@ -7,12 +7,11 @@ interface SensorGridProps {
     sensorData: SensorPort[];
 }
 
-const SENSOR_ICONS: Record<number, string> = {
-    1: '💡',
-    2: '🌡️',
-    5: '📡',
-    9: '🏠',
-    [-2]: '❌'
+const SENSOR_LOGOS: Record<number, string> = {
+    1: '/assets/sensors/light.png',
+    2: '/assets/sensors/aq.png',
+    5: '/assets/sensors/ultrasonic.png',
+    9: '/assets/sensors/sensor9.png'
 };
 
 const SensorGrid: React.FC<SensorGridProps> = ({ sensorData }) => {
@@ -22,31 +21,52 @@ const SensorGrid: React.FC<SensorGridProps> = ({ sensorData }) => {
     return (
         <div className="sensor-grid-container">
             <div className="sensor-grid-header">
-                🔌 Sensor Port Configuration
+                <div className="header-icon">🔌</div>
+                <div className="header-text">
+                    <h3>Sensor Port Configuration</h3>
+                    <p>Real-time hardware status</p>
+                </div>
             </div>
             <div className="sensor-grid">
                 {PORT_POSITIONS.map(({ port, label }) => {
                     const sensor = sensorMap.get(port);
                     const sensorType = sensor?.sensor ?? -2;
-                    const sensorName = SENSOR_NAMES[sensorType] || 'Unknown';
-                    const isConnected = sensorType !== -2;
-                    const icon = SENSOR_ICONS[sensorType] || '❓';
+                    const isConnected = sensorType !== -1 && sensorType !== -2;
+                    const sensorName = isConnected ? SENSOR_NAMES[sensorType] || 'Unknown Sensor' : 'Empty Port';
+                    const logo = SENSOR_LOGOS[sensorType];
 
                     return (
                         <div
                             key={port}
-                            className={`sensor-port ${isConnected ? 'connected' : ''}`}
+                            className={`sensor-port-card ${isConnected ? 'connected' : 'empty'}`}
                         >
-                            <div className="port-label">{label}</div>
-                            <div className="port-number">Port {port}</div>
-                            <div className="sensor-icon">{icon}</div>
-                            <div className={`sensor-name ${!isConnected ? 'not-connected' : ''}`}>
-                                {sensorName}
+                            <div className="port-badge">Port {port}</div>
+                            <div className="port-location">{label}</div>
+
+                            <div className="sensor-visual">
+                                {isConnected && logo ? (
+                                    <img src={logo} alt={sensorName} className="sensor-logo-img" />
+                                ) : (
+                                    <div className="empty-slot-icon">
+                                        {isConnected ? '❓' : '🔌'}
+                                    </div>
+                                )}
                             </div>
-                            {sensor && isConnected && (
-                                <div className="sensor-value">
-                                    Value: {sensor.value.toFixed(2)}
+
+                            <div className="sensor-info">
+                                <div className={`sensor-status-dot ${isConnected ? 'active' : ''}`} />
+                                <span className="sensor-name-text">{sensorName}</span>
+                            </div>
+
+                            {isConnected && sensor && (
+                                <div className="sensor-data-badge">
+                                    <span className="data-label">Value</span>
+                                    <span className="data-value">{sensor.value.toFixed(2)}</span>
                                 </div>
+                            )}
+
+                            {!isConnected && (
+                                <div className="waiting-text">Waiting for connection...</div>
                             )}
                         </div>
                     );

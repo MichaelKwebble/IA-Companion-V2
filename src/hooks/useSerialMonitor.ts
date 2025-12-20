@@ -82,40 +82,60 @@ export function useSerialMonitor() {
 
     const parseJsonData = useCallback((data: string) => {
         try {
-            // Check if this line completes a JSON array
+            // Accumulate data
             bufferRef.current += data;
 
-            // Look for complete JSON array pattern
+            // Look for complete JSON array pattern [ ... ]
             if (bufferRef.current.includes('[') && bufferRef.current.includes(']')) {
-                // Extract all JSON-like content
-                const jsonMatch = bufferRef.current.match(/\[[\s\S]*?\]/);
-                if (jsonMatch) {
-                    const jsonStr = jsonMatch[0];
+                const startIdx = bufferRef.current.indexOf('[');
+                const endIdx = bufferRef.current.lastIndexOf(']') + 1;
+                const rawContent = bufferRef.current.substring(startIdx, endIdx);
 
-                    // Clean up the JSON string - remove timestamps and fix formatting
-                    const cleanJson = jsonStr
-                        .replace(/\d{2}:\d{2}:\d{2}\.\d{3}\s*->\s*/g, '') // Remove timestamps
-                        .replace(/\}\s*,?\s*{/g, '},{')  // Fix object separators
-                        .replace(/"\s*(\w+)"\s*:/g, '"$1":') // Ensure proper key formatting
-                        .replace(/,\s*]/g, ']'); // Remove trailing commas
+                // Try to extract individual objects from the array
+                // The format seems to be: [ "port":0,"sensor":1,"value":1.00}, ... ]
+                // We need to ensure each object is wrapped in { }
 
-                    console.log('[Serial Parser] Cleaned JSON:', cleanJson);
+                // 1. Remove the outer brackets
+                let content = rawContent.slice(1, -1).trim();
 
-                    const parsed = JSON.parse(cleanJson);
-                    if (Array.isArray(parsed)) {
-                        setSensorConfig(parsed);
-                        console.log('[Serial Parser] Updated sensor config:', parsed);
+                // 2. Split by the }, delimiter
+                let parts = content.split(/\}\s*,?\s*/);
+
+                let parsedObjects: SensorPort[] = [];
+
+                parts.forEach(part => {
+                    let cleanPart = part.trim();
+                    if (!cleanPart) return;
+
+                    // Ensure it starts with { and ends with }
+                    if (!cleanPart.startsWith('{')) cleanPart = '{' + cleanPart;
+                    if (!cleanPart.endsWith('}')) cleanPart = cleanPart + '}';
+
+                    try {
+                        const obj = JSON.parse(cleanPart);
+                        if (typeof obj.port === 'number' && typeof obj.sensor === 'number') {
+                            parsedObjects.push(obj as SensorPort);
+                        }
+                    } catch (e) {
+                        // Ignore individual object parse errors
                     }
+                });
 
-                    bufferRef.current = ''; // Clear buffer after successful parse
+                if (parsedObjects.length > 0) {
+                    console.log('[Serial Parser] Successfully parsed sensors:', parsedObjects);
+                    setSensorConfig(parsedObjects);
+                    bufferRef.current = ''; // Clear buffer on success
+                } else {
+                    // If we couldn't parse anything but have a full block, 
+                    // maybe it's getting too long, clear it
+                    if (bufferRef.current.length > 2000) {
+                        bufferRef.current = '';
+                    }
                 }
             }
         } catch (error) {
-            console.error('[Serial Parser] Error parsing JSON:', error);
-            // If parsing fails and buffer is getting large, reset it
-            if (bufferRef.current.length > 1000) {
-                bufferRef.current = '';
-            }
+            console.error('[Serial Parser] Error:', error);
+            if (bufferRef.current.length > 2000) bufferRef.current = '';
         }
     }, []);
 

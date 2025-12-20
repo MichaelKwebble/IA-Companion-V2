@@ -139,9 +139,17 @@ const Home: React.FC = () => {
                 )}
             </div>
 
-            {/* Sensor Grid Testing UI */}
-            {isConnected && sensorConfig.length > 0 && (
-                <SensorGrid sensorData={sensorConfig} />
+            {/* Sensor Grid Section */}
+            {isConnected && (
+                <div className="sensor-section">
+                    <SensorGrid sensorData={sensorConfig} />
+                    {sensorConfig.length === 0 && (
+                        <div className="sensor-waiting-overlay">
+                            <div className="spinner"></div>
+                            <p>Waiting for sensor data from kit...</p>
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );

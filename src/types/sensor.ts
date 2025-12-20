@@ -12,8 +12,9 @@ export const SENSOR_NAMES: Record<number, string> = {
     1: 'Light Sensor',
     2: 'AQ Sensor',
     5: 'Ultrasonic Sensor',
-    9: 'Home Sensor',
-    [-2]: 'Not Connected'
+    9: 'Sensor 9',
+    [-1]: 'Empty Port',
+    [-2]: 'Empty Port'
 };
 
 export const PORT_POSITIONS = [
