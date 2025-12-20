@@ -1,9 +1,23 @@
 import React from 'react';
-import { useDeviceDetection } from '../hooks/useDeviceDetection';
+import { useDevice } from '../context/DeviceContext';
+import SensorGrid from '../components/SensorGrid';
 import '../styles/DeviceDetection.css';
 
 const Home: React.FC = () => {
-    const { devices, isLoading, error, lastUpdate, refresh } = useDeviceDetection();
+    const {
+        devices,
+        isLoading,
+        error,
+        connectionError,
+        isConnected,
+        connectedDevice,
+        isConnecting,
+        refresh,
+        connectToDevice,
+        sensorConfig
+    } = useDevice();
+
+    const lastUpdate = new Date(); // lastUpdate is no longer provided by useDeviceDetection, so we create a new one or remove if not needed. Assuming it's for display purposes.
 
     return (
         <div className="p-md">
@@ -27,6 +41,23 @@ const Home: React.FC = () => {
                     </div>
                 )}
 
+                {connectionError && (
+                    <div className="device-error">
+                        <span className="error-icon">⚠️</span>
+                        <span>Serial Connection Error: {connectionError}</span>
+                        {devices.length > 0 && (
+                            <button
+                                onClick={() => connectToDevice(devices[0])}
+                                className="refresh-btn"
+                                style={{ marginTop: '0.5rem' }}
+                                disabled={isConnecting}
+                            >
+                                {isConnecting ? 'Connecting...' : '🔄 Retry Connection'}
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {!error && (
                     <>
                         <div className="device-status">
@@ -36,6 +67,16 @@ const Home: React.FC = () => {
                             <span className="device-count">
                                 {devices.length} device{devices.length !== 1 ? 's' : ''} detected
                             </span>
+                            {isConnected && (
+                                <span className="status-indicator connected">
+                                    🔗 Serial Connected
+                                </span>
+                            )}
+                            {isConnecting && (
+                                <span className="status-indicator" style={{ color: '#fbbf24' }}>
+                                    ⟳ Connecting...
+                                </span>
+                            )}
                             {lastUpdate && (
                                 <span className="last-update">
                                     Last update: {lastUpdate.toLocaleTimeString()}
@@ -62,7 +103,9 @@ const Home: React.FC = () => {
                                     <div key={device.usbSerial} className="device-card">
                                         <div className="device-card-header">
                                             <span className="device-number">Device #{index + 1}</span>
-                                            <span className="device-status-badge">Active</span>
+                                            <span className="device-status-badge">
+                                                {connectedDevice?.usbSerial === device.usbSerial ? 'Connected' : 'Active'}
+                                            </span>
                                         </div>
                                         <div className="device-details">
                                             <div className="device-detail-row">
@@ -95,6 +138,11 @@ const Home: React.FC = () => {
                     </>
                 )}
             </div>
+
+            {/* Sensor Grid Testing UI */}
+            {isConnected && sensorConfig.length > 0 && (
+                <SensorGrid sensorData={sensorConfig} />
+            )}
         </div>
     );
 };

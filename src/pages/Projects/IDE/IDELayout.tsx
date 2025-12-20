@@ -13,6 +13,7 @@ import LayerManager from './components/LayerManager';
 import ComponentLibrary from './components/ComponentLibrary';
 import PropertiesPanel from './components/PropertiesPanel';
 import LessonToolbar from './components/LessonToolbar';
+import { useDevice } from '../../../context/DeviceContext';
 
 interface Project {
     id: string;
@@ -31,6 +32,9 @@ const IDELayout: React.FC = () => {
     const lessonId = searchParams.get('lessonId');
     const classId = searchParams.get('classId');
     const isLessonMode = !!(lessonId && classId);
+
+    // Use global device context
+    const { isConnected, serialData } = useDevice();
 
     const [activeProjectId, setActiveProjectId] = useState('1');
     const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
@@ -256,10 +260,22 @@ const IDELayout: React.FC = () => {
                                             <div className="terminal-content">
                                                 {activeTerminalId === 'serial' ? (
                                                     <div className="terminal-output">
-                                                        <span className="info">&gt; Serial monitor connected on COM3...</span><br />
-                                                        <span className="output">Sensor Value: 342</span><br />
-                                                        <span className="output">Sensor Value: 345</span><br />
-                                                        <span className="output">Sensor Value: 341</span>
+                                                        {isConnected ? (
+                                                            serialData.length > 0 ? (
+                                                                serialData.map((line, index) => (
+                                                                    <React.Fragment key={index}>
+                                                                        <span className={line.includes('ERROR') ? 'error' : line.includes('>') ? 'info' : 'output'}>
+                                                                            {line}
+                                                                        </span>
+                                                                        <br />
+                                                                    </React.Fragment>
+                                                                ))
+                                                            ) : (
+                                                                <span className="info">&gt; Waiting for serial data...</span>
+                                                            )
+                                                        ) : (
+                                                            <span className="info">&gt; Serial monitor not connected. Connect a device from the Home page.</span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <div className="terminal-output">

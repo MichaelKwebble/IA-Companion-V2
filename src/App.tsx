@@ -6,28 +6,32 @@ import IDELayout from './pages/Projects/IDE/IDELayout';
 import LectureDashboard from './pages/Lectures/LectureDashboard';
 import LectureViewer from './pages/Lectures/LectureViewer';
 import Community from './pages/Community';
+import { DeviceProvider } from './context/DeviceContext';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<Home />} />
-          <Route path="projects">
-            <Route index element={<ProjectDashboard />} />
-            <Route path=":projectId" element={<IDELayout />} />
+    <DeviceProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<Home />} />
+            <Route path="projects">
+              <Route index element={<ProjectDashboard />} />
+              <Route path=":projectId" element={<IDELayout />} />
+            </Route>
+            <Route path="lectures">
+              <Route index element={<LectureDashboard />} />
+              <Route path=":classId/lesson/:lessonId" element={<LectureViewer />} />
+            </Route>
+            <Route path="community" element={<Community />} />
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-          <Route path="lectures">
-            <Route index element={<LectureDashboard />} />
-            <Route path=":classId/lesson/:lessonId" element={<LectureViewer />} />
-          </Route>
-          <Route path="community" element={<Community />} />
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </DeviceProvider>
   );
 }
 
 export default App;
+
