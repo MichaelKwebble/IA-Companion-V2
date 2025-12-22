@@ -85,15 +85,52 @@ export function useSerialMonitor() {
             // Accumulate data
             bufferRef.current += data;
 
-            // Look for complete JSON array pattern [ ... ]
-            if (bufferRef.current.includes('[') && bufferRef.current.includes(']')) {
-                const startIdx = bufferRef.current.indexOf('[');
-                const endIdx = bufferRef.current.lastIndexOf(']') + 1;
-                const rawContent = bufferRef.current.substring(startIdx, endIdx);
+            // Clean the buffer: remove timestamps like "12:27:29.205 -> "
+            const cleanBuffer = bufferRef.current.replace(/\d{2}:\d{2}:\d{2}\.\d{3}\s*->\s*/g, '');
 
-                // Try to extract individual objects from the array
-                // The format seems to be: [ "port":0,"sensor":1,"value":1.00}, ... ]
-                // We need to ensure each object is wrapped in { }
+            // Try to find a complete JSON object or array
+            const firstBrace = cleanBuffer.indexOf('{');
+            const firstBracket = cleanBuffer.indexOf('[');
+
+            // Handle new format: {"status":[...], "sensor_names":[...]}
+            if (firstBrace !== -1 && cleanBuffer.includes('}', firstBrace)) {
+                const lastBrace = cleanBuffer.lastIndexOf('}');
+                const jsonStr = cleanBuffer.substring(firstBrace, lastBrace + 1);
+
+                try {
+                    const parsed = JSON.parse(jsonStr);
+                    if (parsed.status && parsed.sensor_names) {
+                        const SENSOR_MAPPING: Record<string, number> = {
+                            'light': 1,
+                            'aq': 2,
+                            'ultrasonic': 5,
+                            'ir': 9,
+                            'not_detected': -2
+                        };
+
+                        const newConfig: SensorPort[] = parsed.sensor_names.map((name: string, index: number) => ({
+                            port: index,
+                            sensor: SENSOR_MAPPING[name] || -2,
+                            value: 0 // Status messages might not have values
+                        }));
+
+                        console.log('[Serial Parser] Parsed status update:', newConfig);
+                        setSensorConfig(newConfig);
+                        // Clear the part of the buffer we just processed
+                        // We use the original buffer to find where to cut
+                        const processedPart = bufferRef.current.substring(0, bufferRef.current.lastIndexOf('}') + 1);
+                        bufferRef.current = bufferRef.current.substring(processedPart.length);
+                        return;
+                    }
+                } catch (e) {
+                    // Not a valid full JSON yet or different format
+                }
+            }
+
+            // Handle legacy/fragmented format: [ "port":0,"sensor":1,"value":1.00}, ... ]
+            if (firstBracket !== -1 && cleanBuffer.includes(']', firstBracket)) {
+                const lastBracket = cleanBuffer.lastIndexOf(']') + 1;
+                const rawContent = cleanBuffer.substring(firstBracket, lastBracket);
 
                 // 1. Remove the outer brackets
                 let content = rawContent.slice(1, -1).trim();
@@ -107,7 +144,6 @@ export function useSerialMonitor() {
                     let cleanPart = part.trim();
                     if (!cleanPart) return;
 
-                    // Ensure it starts with { and ends with }
                     if (!cleanPart.startsWith('{')) cleanPart = '{' + cleanPart;
                     if (!cleanPart.endsWith('}')) cleanPart = cleanPart + '}';
 
@@ -116,26 +152,23 @@ export function useSerialMonitor() {
                         if (typeof obj.port === 'number' && typeof obj.sensor === 'number') {
                             parsedObjects.push(obj as SensorPort);
                         }
-                    } catch (e) {
-                        // Ignore individual object parse errors
-                    }
+                    } catch (e) { }
                 });
 
                 if (parsedObjects.length > 0) {
-                    console.log('[Serial Parser] Successfully parsed sensors:', parsedObjects);
                     setSensorConfig(parsedObjects);
-                    bufferRef.current = ''; // Clear buffer on success
-                } else {
-                    // If we couldn't parse anything but have a full block, 
-                    // maybe it's getting too long, clear it
-                    if (bufferRef.current.length > 2000) {
-                        bufferRef.current = '';
-                    }
+                    const processedPart = bufferRef.current.substring(0, bufferRef.current.lastIndexOf(']') + 1);
+                    bufferRef.current = bufferRef.current.substring(processedPart.length);
                 }
+            }
+
+            // Prevent buffer bloat
+            if (bufferRef.current.length > 4000) {
+                bufferRef.current = '';
             }
         } catch (error) {
             console.error('[Serial Parser] Error:', error);
-            if (bufferRef.current.length > 2000) bufferRef.current = '';
+            if (bufferRef.current.length > 4000) bufferRef.current = '';
         }
     }, []);
 

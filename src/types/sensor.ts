@@ -12,7 +12,7 @@ export const SENSOR_NAMES: Record<number, string> = {
     1: 'Light Sensor',
     2: 'AQ Sensor',
     5: 'Ultrasonic Sensor',
-    9: 'Sensor 9',
+    9: 'IR Sensor',
     [-1]: 'Empty Port',
     [-2]: 'Empty Port'
 };
