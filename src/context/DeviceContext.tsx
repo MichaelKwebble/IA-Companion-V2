@@ -11,12 +11,14 @@ interface DeviceContextType {
     error: string | null;
     connectionError: string | null;
     isConnecting: boolean;
+    isFlashing: boolean;
     serialData: string[];
     sensorConfig: any[];
     refresh: () => void;
     connectToDevice: (device: ESP32Device) => Promise<any>;
     disconnect: () => Promise<void>;
     sendCommand: (command: string) => void;
+    flashCode: (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string) => Promise<any>;
     clearLog: () => void;
 }
 
@@ -37,6 +39,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const [connectionError, setConnectionError] = React.useState<string | null>(null);
     const [isConnecting, setIsConnecting] = React.useState(false);
+    const [isFlashing, setIsFlashing] = React.useState(false);
     const lastAttemptedDeviceRef = useRef<string | null>(null);
 
     const connectToDevice = useCallback(async (device: ESP32Device) => {
@@ -58,9 +61,27 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [serialConnect]);
 
+    const flashCode = useCallback(async (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string) => {
+        setIsFlashing(true);
+        try {
+            const response = await fetch('http://localhost:3001/api/flash', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, usbSerial, projectRoot, currentFilePath })
+            });
+            const result = await response.json();
+            return result;
+        } catch (err) {
+            console.error('[DeviceContext] Flash error:', err);
+            return { success: false, error: (err as Error).message };
+        } finally {
+            setIsFlashing(false);
+        }
+    }, []);
+
     // Global auto-connect logic - works from any page
     useEffect(() => {
-        if (devices.length > 0 && !isConnected && !isConnecting && !connectionError) {
+        if (devices.length > 0 && !isConnected && !isConnecting && !connectionError && !isFlashing) {
             const firstDevice = devices[0];
             // Only auto-connect if we haven't already tried this device or if it's a different device
             if (lastAttemptedDeviceRef.current !== firstDevice.usbSerial || !connectedDevice) {
@@ -74,7 +95,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setConnectionError(null);
             lastAttemptedDeviceRef.current = null;
         }
-    }, [devices, isConnected, isConnecting, connectedDevice, connectToDevice, connectionError]);
+    }, [devices, isConnected, isConnecting, connectedDevice, connectToDevice, connectionError, isFlashing]);
 
     const value: DeviceContextType = {
         devices,
@@ -84,12 +105,14 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         error,
         connectionError,
         isConnecting,
+        isFlashing,
         serialData,
         sensorConfig,
         refresh,
         connectToDevice,
         disconnect,
         sendCommand,
+        flashCode,
         clearLog
     };
 

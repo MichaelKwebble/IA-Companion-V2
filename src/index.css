@@ -76,6 +76,10 @@ button {
   color: white;
   padding: 8px 16px;
   border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn-primary:hover {

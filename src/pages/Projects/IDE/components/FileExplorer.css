@@ -6,12 +6,33 @@
 }
 
 .explorer-header {
-    padding: 8px 8px;
+    padding: 8px 12px;
     font-size: 11px;
     font-weight: 600;
     color: var(--color-text-secondary);
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.add-file-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.add-file-btn:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-primary);
 }
 
 .explorer-content {
@@ -65,4 +86,27 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.create-file-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    background: var(--color-bg-hover);
+}
+
+.create-file-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    outline: none;
+    padding: 0;
+}
+
+.create-file-input::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.5;
 }

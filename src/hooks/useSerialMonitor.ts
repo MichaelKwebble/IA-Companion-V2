@@ -3,11 +3,12 @@ import type { ESP32Device } from '../types/device';
 import type { SensorPort } from '../types/sensor';
 
 interface SerialMessage {
-    type: 'serial-data' | 'serial-status' | 'serial-error';
-    data?: string;
-    status?: 'connected' | 'disconnected';
+    type: 'serial-data' | 'serial-status' | 'serial-error' | 'flash-status';
+    data?: string | string[];
+    status?: 'connected' | 'disconnected' | 'compiling' | 'uploading' | 'success' | 'error';
     device?: ESP32Device;
     error?: string;
+    message?: string;
     timestamp?: string;
 }
 
@@ -234,24 +235,37 @@ export function useSerialMonitor() {
 
                 case 'serial-data':
                     const timestamp = new Date(message.timestamp || Date.now()).toLocaleTimeString();
-                    const newEntry = `${timestamp} -> ${message.data}`;
+                    let newEntries: string[] = [];
+
+                    if (Array.isArray(message.data)) {
+                        newEntries = message.data.map(line => `${timestamp} -> ${line}`);
+                    } else if (message.data) {
+                        newEntries = [`${timestamp} -> ${message.data}`];
+                    }
 
                     setSerialData(prev => {
-                        // Deduplicate: don't add if it's the exact same as the last message
-                        if (prev.length > 0 && prev[prev.length - 1] === newEntry) {
-                            return prev;
+                        const updated = [...prev, ...newEntries];
+                        // Limit history to last 1000 lines to prevent freeze
+                        if (updated.length > 1000) {
+                            return updated.slice(-1000);
                         }
-                        return [...prev, newEntry];
+                        return updated;
                     });
 
                     // Try to parse JSON sensor data
                     if (message.data) {
-                        parseJsonData(message.data);
+                        const dataToParse = Array.isArray(message.data) ? message.data.join('') : message.data;
+                        parseJsonData(dataToParse);
                     }
                     break;
 
                 case 'serial-error':
                     setSerialData(prev => [...prev, `ERROR: ${message.error}`]);
+                    break;
+
+                case 'flash-status':
+                    const flashTimestamp = new Date().toLocaleTimeString();
+                    setSerialData(prev => [...prev, `${flashTimestamp} [Flash] ${message.message}`]);
                     break;
             }
         };

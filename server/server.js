@@ -6,10 +6,18 @@ import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 import { WebSocketServer } from 'ws';
 import http from 'http';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const execAsync = promisify(exec);
 const app = express();
 const PORT = 3001;
+let currentProjectRoot = path.join(__dirname, '..');
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -21,6 +29,12 @@ const wss = new WebSocketServer({ server });
 app.use(cors());
 app.use(express.json());
 
+// Logging middleware for debugging
+app.use((req, res, next) => {
+    console.log(`[Server] ${req.method} ${req.url}`);
+    next();
+});
+
 // Target USB identifiers for ESP32-S3
 const TARGET_VENDOR_ID = 12346;  // 0x303A in decimal
 const TARGET_PRODUCT_ID = 4097;  // 0x1001 in decimal
@@ -29,6 +43,9 @@ const TARGET_PRODUCT_ID = 4097;  // 0x1001 in decimal
 let connectedPort = null;
 let connectedDevice = null;
 let isConnecting = false;
+let isFlashing = false;
+let serialBuffer = [];
+let flushInterval = null;
 
 /**
  * Parse ioreg output to extract ESP32-S3 devices
@@ -104,7 +121,7 @@ function parseIoregOutput(ioregOutput) {
                             usbSerial: currentDevice.usbSerial,
                             vendorId: currentDevice.vendorId,
                             productId: currentDevice.productId,
-                            deviceName: currentDevice.deviceName || 'Unknown',
+                            deviceName: 'IA Kit Pro (temporary)',
                             detectedAt: new Date().toISOString()
                         });
 
@@ -172,9 +189,9 @@ async function detectDevices() {
  * Connect to serial port
  */
 async function connectToSerial(device) {
-    if (isConnecting) {
-        console.log('[Serial] Connection already in progress, skipping...');
-        return { success: false, error: 'Connection already in progress' };
+    if (isConnecting || isFlashing) {
+        console.log(`[Serial] Connection skipped: isConnecting=${isConnecting}, isFlashing=${isFlashing}`);
+        return { success: false, error: 'Connection or flash in progress' };
     }
 
     isConnecting = true;
@@ -226,13 +243,20 @@ async function connectToSerial(device) {
             });
 
             parser.on('data', (line) => {
-                console.log(`[Serial] Data: ${line}`);
-                // Broadcast serial data to all WebSocket clients
-                broadcastToClients({
-                    type: 'serial-data',
-                    data: line,
-                    timestamp: new Date().toISOString()
-                });
+                // strict check: do not send data if we are flashing
+                if (isFlashing) {
+                    console.log('[Serial] Skipping data due to flashing');
+                    return;
+                }
+
+                // Buffer data instead of sending immediately
+                console.log('[Serial] Data received:', line.substring(0, 50)); // Debug log
+                serialBuffer.push(line);
+
+                // Cap buffer size to prevent memory issues with extreme spam
+                if (serialBuffer.length > 2000) {
+                    serialBuffer = serialBuffer.slice(-1000); // Keep last 1000 lines
+                }
             });
 
             port.on('error', (err) => {
@@ -256,6 +280,8 @@ async function connectToSerial(device) {
 
             port.on('close', () => {
                 console.log('[Serial] Port closed');
+                if (flushInterval) clearInterval(flushInterval);
+                serialBuffer = [];
                 connectedPort = null;
                 connectedDevice = null;
                 isConnecting = false;
@@ -265,9 +291,23 @@ async function connectToSerial(device) {
                 });
             });
 
-            // Attempt to open the port
+            // Start flush interval
+            if (flushInterval) clearInterval(flushInterval);
+            flushInterval = setInterval(() => {
+                if (serialBuffer.length > 0) {
+                    console.log(`[Serial] Flushing ${serialBuffer.length} lines`);
+                    broadcastToClients({
+                        type: 'serial-data',
+                        data: serialBuffer,
+                        timestamp: new Date().toISOString()
+                    });
+                    serialBuffer = [];
+                }
+            }, 100); // Flush every 100ms (throttled)
+
             port.open((err) => {
                 if (err) {
+                    if (flushInterval) clearInterval(flushInterval);
                     isConnecting = false;
                     let errorMessage = err.message;
                     if (err.message.includes('Resource busy') || err.message.includes('cannot open')) {
@@ -385,6 +425,344 @@ app.post('/api/serial/disconnect', async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+// API endpoint to flash code to a device
+app.post('/api/flash', async (req, res) => {
+    const { code, usbSerial, projectRoot, currentFilePath } = req.body;
+    if (!code || !usbSerial) {
+        return res.status(400).json({ success: false, error: 'Code and usbSerial are required' });
+    }
+
+    // 0. Immediate flag set to stop data flow
+    isFlashing = true;
+
+    let tempDir = null;
+    let wasConnected = false;
+    let deviceToReconnect = null;
+
+    try {
+        // 1. Find the port
+        const portPath = await findSerialPortPath(usbSerial);
+        if (!portPath) {
+            throw new Error(`Could not find serial port for device ${usbSerial}`);
+        }
+
+        // 2. Pause serial connection if it's currently active
+        if (connectedPort && connectedPort.isOpen && connectedPort.path === portPath) {
+            console.log(`[Flash] Aggressively pausing serial connection on ${portPath}...`);
+            wasConnected = true;
+            deviceToReconnect = connectedDevice;
+
+            // Immediately stop data flow to prevent lag
+            try {
+                connectedPort.unpipe();
+                connectedPort.removeAllListeners('data');
+                connectedPort.removeAllListeners('error');
+
+                // Drain any pending data
+                console.log('[Flash] Draining port...');
+                await new Promise((resolve) => connectedPort.drain(resolve));
+
+                // Toggle DTR/RTS to force reset
+                console.log('[Flash] Toggling DTR/RTS for hard reset...');
+                await new Promise(resolve => connectedPort.set({ dtr: false, rts: true }, resolve));
+                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => connectedPort.set({ dtr: true, rts: false }, resolve));
+
+                // Flush any remaining data
+                await new Promise((resolve) => connectedPort.flush(resolve));
+            } catch (e) {
+                console.warn('[Flash] Error clearing listeners/resetting:', e.message);
+            }
+
+            await new Promise((resolve) => {
+                connectedPort.close(() => {
+                    resolve();
+                });
+            });
+            connectedPort = null; // Explicitly nullify immediately
+
+            broadcastToClients({ type: 'serial-status', status: 'disconnected' });
+            // Longer delay to ensure OS releases the port and device resets
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
+        // 2.5 Force 1200bps touch for ESP32-S3 USB CDC bootloader entry
+        console.log(`[Flash] Waiting for port to settle...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        console.log(`[Flash] Triggering 1200bps touch on ${portPath}...`);
+        try {
+            const touchPort = new SerialPort({ path: portPath, baudRate: 1200, autoOpen: false });
+            await new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    console.warn('[Flash] 1200bps touch timed out');
+                    resolve();
+                }, 5000); // Increased timeout for busy systems
+
+                touchPort.open(async (err) => {
+                    if (!err) {
+                        console.log('[Flash] 1200bps touch port opened, holding for 100ms...');
+                        // Hold the 1200bps connection briefly to ensure OS registers it
+                        await new Promise(r => setTimeout(r, 100));
+
+                        touchPort.close(() => {
+                            clearTimeout(timeout);
+                            resolve();
+                        });
+                    } else {
+                        console.warn(`[Flash] 1200bps touch open failed: ${err.message}`);
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                });
+            });
+            // Wait longer for device to re-enumerate in bootloader mode
+            console.log('[Flash] Waiting for device to enter bootloader...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (touchErr) {
+            console.warn(`[Flash] 1200bps touch error: ${touchErr.message}`);
+        }
+
+        isFlashing = true;
+
+        // 3. Create temporary sketch
+        const parentTempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ia-companion-'));
+
+        // Determine sketch name from currentFilePath or default to 'sketch'
+        let sketchName = 'sketch';
+        if (currentFilePath) {
+            sketchName = path.basename(currentFilePath, path.extname(currentFilePath));
+        }
+
+        tempDir = path.join(parentTempDir, sketchName);
+        await fs.mkdir(tempDir, { recursive: true });
+
+        if (projectRoot) {
+            console.log(`[Flash] Copying project files from ${projectRoot} to ${tempDir}`);
+            // Copy all files from projectRoot to tempDir
+            const entries = await fs.readdir(projectRoot, { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.isFile()) {
+                    const ext = path.extname(entry.name);
+                    // Only copy source files
+                    if (['.ino', '.h', '.cpp', '.c', '.hpp'].includes(ext)) {
+                        await fs.copyFile(path.join(projectRoot, entry.name), path.join(tempDir, entry.name));
+                    }
+                }
+            }
+        }
+
+        // Ensure the main .ino file exists and has the latest code
+        const mainInoPath = path.join(tempDir, `${sketchName}.ino`);
+        await fs.writeFile(mainInoPath, code);
+
+        console.log(`[Flash] Compiling and flashing to ${portPath}...`);
+        broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling code...' });
+
+        // 4. Compile
+        const fqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default';
+        console.log(`[Flash] Using FQBN: ${fqbn}`);
+        try {
+            console.log(`[Flash] Compiling sketch in: ${tempDir}`);
+            const { stdout: compileOut, stderr: compileErr } = await execAsync(`arduino-cli compile --fqbn ${fqbn} "${tempDir}"`);
+            console.log('[Flash] Compile output:', compileOut);
+            if (compileErr) console.warn('[Flash] Compile warnings:', compileErr);
+        } catch (err) {
+            throw new Error(`Compilation failed: ${err.message}`);
+        }
+
+        broadcastToClients({ type: 'flash-status', status: 'uploading', message: 'Uploading to device...' });
+
+        // 5. Upload
+        try {
+            console.log(`[Flash] Uploading to port: ${portPath}`);
+            const { stdout: uploadOut, stderr: uploadErr } = await execAsync(`arduino-cli upload -p ${portPath} --fqbn ${fqbn} "${tempDir}"`);
+            console.log('[Flash] Upload output:', uploadOut);
+            if (uploadErr) console.warn('[Flash] Upload warnings:', uploadErr);
+        } catch (err) {
+            throw new Error(`Upload failed: ${err.message}`);
+        }
+
+        broadcastToClients({ type: 'flash-status', status: 'success', message: 'Flash successful!' });
+
+        // 6. Reconnect if it was connected before
+        if (wasConnected && deviceToReconnect) {
+            console.log(`[Flash] Reconnecting to ${portPath} (with retries)...`);
+
+            const maxRetries = 5;
+            let retryCount = 0;
+
+            const attemptReconnect = async () => {
+                try {
+                    console.log(`[Flash] Reconnection attempt ${retryCount + 1}/${maxRetries}...`);
+                    const result = await connectToSerial(deviceToReconnect);
+                    if (result.success) {
+                        console.log('[Flash] Reconnected successfully!');
+                        return true;
+                    }
+                } catch (err) {
+                    console.warn(`[Flash] Reconnection attempt ${retryCount + 1} failed: ${err.message}`);
+                }
+                return false;
+            };
+
+            const runRetryLoop = async () => {
+                while (retryCount < maxRetries) {
+                    // Wait a bit for the device to reset and OS to re-enumerate
+                    await new Promise(resolve => setTimeout(resolve, 1500 + (retryCount * 500)));
+
+                    const success = await attemptReconnect();
+                    if (success) break;
+
+                    retryCount++;
+                }
+
+                if (retryCount >= maxRetries) {
+                    console.error('[Flash] Failed to auto-reconnect after all attempts.');
+                    broadcastToClients({
+                        type: 'serial-error',
+                        error: 'Failed to auto-reconnect serial monitor. Please try connecting manually.'
+                    });
+                }
+            };
+
+            runRetryLoop();
+        }
+
+        res.json({ success: true, message: 'Flash successful' });
+
+    } catch (error) {
+        console.error('[Flash] Error:', error.message);
+        broadcastToClients({ type: 'flash-status', status: 'error', message: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        isFlashing = false;
+        // Cleanup temp files
+        if (tempDir) {
+            try {
+                // Clean up the parent temp dir
+                await fs.rm(path.dirname(tempDir), { recursive: true, force: true });
+            } catch (err) {
+                console.error('[Flash] Cleanup error:', err.message);
+            }
+        }
+    }
+});
+
+// API endpoint to list files
+app.get('/api/files', async (req, res) => {
+    const projectRoot = currentProjectRoot;
+
+    async function getFiles(dir) {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const files = await Promise.all(entries.map(async (entry) => {
+            const resPath = path.resolve(dir, entry.name);
+            const relPath = path.relative(projectRoot, resPath);
+
+            // Skip node_modules and .git
+            if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') {
+                return null;
+            }
+
+            if (entry.isDirectory()) {
+                const children = await getFiles(resPath);
+                return {
+                    id: relPath,
+                    name: entry.name,
+                    type: 'folder',
+                    children: children.filter(c => c !== null)
+                };
+            } else {
+                return {
+                    id: relPath,
+                    name: entry.name,
+                    type: 'file'
+                };
+            }
+        }));
+        return files.filter(f => f !== null);
+    }
+
+    try {
+        const fileTree = await getFiles(projectRoot);
+        res.json({ success: true, files: fileTree });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to read a file
+app.get('/api/files/read', async (req, res) => {
+    const { filePath } = req.query;
+    if (!filePath) return res.status(400).json({ success: false, error: 'filePath is required' });
+
+    try {
+        const fullPath = path.join(currentProjectRoot, filePath);
+        const content = await fs.readFile(fullPath, 'utf-8');
+        res.json({ success: true, content });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to write a file
+app.post('/api/files/write', async (req, res) => {
+    const { filePath, content } = req.body;
+    if (!filePath || content === undefined) {
+        return res.status(400).json({ success: false, error: 'filePath and content are required' });
+    }
+
+    try {
+        const fullPath = path.join(currentProjectRoot, filePath);
+        await fs.writeFile(fullPath, content, 'utf-8');
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to create a new file
+app.post('/api/files/create', async (req, res) => {
+    const { filePath, content } = req.body;
+    if (!filePath) return res.status(400).json({ success: false, error: 'filePath is required' });
+
+    try {
+        const fullPath = path.join(currentProjectRoot, filePath);
+
+        // Check if file already exists
+        try {
+            await fs.access(fullPath);
+            return res.status(400).json({ success: false, error: 'File already exists' });
+        } catch (e) {
+            // File does not exist, proceed
+        }
+
+        // Ensure directory exists
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+
+        await fs.writeFile(fullPath, content || '', 'utf-8');
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to set project root
+app.post('/api/config/project-root', async (req, res) => {
+    const { rootPath } = req.body;
+    if (!rootPath) return res.status(400).json({ success: false, error: 'rootPath is required' });
+
+    try {
+        // Verify path exists
+        await fs.access(rootPath);
+        currentProjectRoot = rootPath;
+        console.log(`[Config] Project root updated to: ${currentProjectRoot}`);
+        res.json({ success: true, root: currentProjectRoot });
+    } catch (error) {
+        res.status(400).json({ success: false, error: `Invalid path: ${error.message}` });
     }
 });
 

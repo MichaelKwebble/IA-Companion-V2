@@ -89,7 +89,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
       `}</style>
             <Editor
                 height="100%"
-                defaultLanguage="cpp"
+                language="cpp"
                 value={code}
                 onChange={(value) => onChange(value || '')}
                 onMount={handleEditorDidMount}
