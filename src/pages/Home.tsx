@@ -67,15 +67,19 @@ const Home: React.FC = () => {
                             <span className="device-count">
                                 {devices.length} device{devices.length !== 1 ? 's' : ''} detected
                             </span>
-                            {isConnected && (
+                            {isConnected ? (
                                 <span className="status-indicator connected">
                                     🔗 Serial Connected
                                 </span>
-                            )}
-                            {isConnecting && (
-                                <span className="status-indicator" style={{ color: '#fbbf24' }}>
-                                    ⟳ Connecting...
-                                </span>
+                            ) : devices.length > 0 && (
+                                <button
+                                    onClick={() => connectToDevice(devices[0])}
+                                    className="refresh-btn"
+                                    style={{ marginLeft: '1rem', padding: '4px 12px', fontSize: '0.85rem' }}
+                                    disabled={isConnecting}
+                                >
+                                    {isConnecting ? '⟳ Connecting...' : '🔗 Reconnect'}
+                                </button>
                             )}
                             {lastUpdate && (
                                 <span className="last-update">

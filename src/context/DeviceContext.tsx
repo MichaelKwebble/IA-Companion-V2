@@ -82,22 +82,25 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Global auto-connect logic - works from any page
     useEffect(() => {
-        if (devices.length > 0 && !isConnected && !isConnecting && !connectionError && !isFlashing) {
+        // If we have devices but are not connected, try to auto-connect
+        if (devices.length > 0 && !isConnected && !isConnecting && !isFlashing) {
             const firstDevice = devices[0];
-            // Only auto-connect if we haven't already tried this device
-            // This prevents auto-reconnection loops after manual disconnect or flash
-            if (lastAttemptedDeviceRef.current !== firstDevice.usbSerial) {
+
+            // If we have a connection error, we only retry if the device list just changed (replugged)
+            // or if we haven't tried this specific device yet.
+            if (!connectionError || lastAttemptedDeviceRef.current !== firstDevice.usbSerial) {
                 console.log('[DeviceProvider] Auto-connecting to device:', firstDevice);
                 connectToDevice(firstDevice);
             }
         }
 
-        // Reset connection error if device is removed
-        if (devices.length === 0 && connectionError) {
-            setConnectionError(null);
-            lastAttemptedDeviceRef.current = null;
+        // Reset connection error and last attempted device if all devices are removed
+        // This allows auto-connect to trigger again when a device is replugged
+        if (devices.length === 0) {
+            if (connectionError) setConnectionError(null);
+            if (lastAttemptedDeviceRef.current) lastAttemptedDeviceRef.current = null;
         }
-    }, [devices, isConnected, isConnecting, connectedDevice, connectToDevice, connectionError, isFlashing]);
+    }, [devices, isConnected, isConnecting, connectToDevice, connectionError, isFlashing]);
 
     const value: DeviceContextType = {
         devices,
