@@ -63,6 +63,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const flashCode = useCallback(async (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string) => {
         setIsFlashing(true);
+
         try {
             const response = await fetch('http://localhost:3001/api/flash', {
                 method: 'POST',
@@ -83,8 +84,9 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (devices.length > 0 && !isConnected && !isConnecting && !connectionError && !isFlashing) {
             const firstDevice = devices[0];
-            // Only auto-connect if we haven't already tried this device or if it's a different device
-            if (lastAttemptedDeviceRef.current !== firstDevice.usbSerial || !connectedDevice) {
+            // Only auto-connect if we haven't already tried this device
+            // This prevents auto-reconnection loops after manual disconnect or flash
+            if (lastAttemptedDeviceRef.current !== firstDevice.usbSerial) {
                 console.log('[DeviceProvider] Auto-connecting to device:', firstDevice);
                 connectToDevice(firstDevice);
             }

@@ -245,9 +245,9 @@ export function useSerialMonitor() {
 
                     setSerialData(prev => {
                         const updated = [...prev, ...newEntries];
-                        // Limit history to last 1000 lines to prevent freeze
-                        if (updated.length > 1000) {
-                            return updated.slice(-1000);
+                        // Limit history to last 500 lines for better performance
+                        if (updated.length > 500) {
+                            return updated.slice(-500);
                         }
                         return updated;
                     });
@@ -265,7 +265,15 @@ export function useSerialMonitor() {
 
                 case 'flash-status':
                     const flashTimestamp = new Date().toLocaleTimeString();
-                    setSerialData(prev => [...prev, `${flashTimestamp} [Flash] ${message.message}`]);
+
+                    // Clear serial data when flash starts to prevent interference
+                    if (message.status === 'compiling' || message.status === 'uploading') {
+                        console.log('[Serial] Clearing serial data for flash operation');
+                        setSerialData([`${flashTimestamp} [Flash] ${message.message}`]);
+                        bufferRef.current = '';
+                    } else {
+                        setSerialData(prev => [...prev, `${flashTimestamp} [Flash] ${message.message}`]);
+                    }
                     break;
             }
         };

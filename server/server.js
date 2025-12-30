@@ -46,6 +46,180 @@ let isConnecting = false;
 let isFlashing = false;
 let serialBuffer = [];
 let flushInterval = null;
+let reconnectionAbortController = null;
+let lastDataTimestamp = null; // Track when last serial data was received
+let connectionEstablishedAt = null; // Track when connection was established
+
+/**
+ * Cancel any pending reconnection attempts
+ */
+function cancelReconnection() {
+    if (reconnectionAbortController) {
+        console.log('[Serial] Cancelling pending reconnection attempts...');
+        reconnectionAbortController.abort();
+        reconnectionAbortController = null;
+    }
+}
+
+// Port Manager to handle exclusive access
+class PortManager {
+    constructor() {
+        this.port = null;
+        this.owner = 'IDLE'; // IDLE, SCANNING, MANUAL, FLASHING
+        this.portPath = null;
+        this.mutex = Promise.resolve();
+    }
+
+    /**
+     * Acquire the port for a specific purpose
+     * @param {string} purpose - 'SCANNING', 'MANUAL', 'FLASHING'
+     * @param {string} path - Optional port path
+     */
+    async acquire(purpose, path = null) {
+        // Chain to mutex to serialize access
+        const release = await this._lock();
+        try {
+            console.log(`[PortManager] Request to acquire for ${purpose} (Current: ${this.owner})`);
+
+            // If we already own it for the same purpose, just update path if needed
+            if (this.owner === purpose) {
+                if (path) this.portPath = path;
+                return true;
+            }
+
+            // Conflict resolution
+            if (this.owner !== 'IDLE') {
+                // If flashing, reject everything else
+                if (this.owner === 'FLASHING') {
+                    console.log(`[PortManager] Rejected ${purpose} because FLASHING`);
+                    return false;
+                }
+
+                // If manual connection active, reject scanning
+                if (this.owner === 'MANUAL' && purpose === 'SCANNING') {
+                    return false;
+                }
+
+                // If flashing requested, we must preempt others
+                if (purpose === 'FLASHING') {
+                    console.log(`[PortManager] Preempting ${this.owner} for FLASHING`);
+                    await this._forceRelease();
+                } else if (purpose === 'MANUAL' && this.owner === 'SCANNING') {
+                    // Manual preempts scanning
+                    await this._forceRelease();
+                } else {
+                    console.log(`[PortManager] Rejected ${purpose} because busy with ${this.owner}`);
+                    return false;
+                }
+            }
+
+            this.owner = purpose;
+            if (path) this.portPath = path;
+            console.log(`[PortManager] Acquired for ${purpose}`);
+            return true;
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Release the port
+     * @param {string} purpose - The purpose we are releasing
+     */
+    async release(purpose) {
+        const release = await this._lock();
+        try {
+            if (this.owner === purpose) {
+                console.log(`[PortManager] Releasing ${purpose}`);
+                await this._closePort();
+                this.owner = 'IDLE';
+                this.portPath = null;
+                this.port = null;
+            }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Set the active serial port object
+     */
+    setPort(port) {
+        this.port = port;
+    }
+
+    /**
+     * Get current owner
+     */
+    getOwner() {
+        return this.owner;
+    }
+
+    // Private: Mutex lock
+    _lock() {
+        let release;
+        const newLock = new Promise(resolve => release = resolve);
+        const oldMutex = this.mutex;
+        this.mutex = oldMutex.then(() => newLock);
+        return oldMutex.then(() => release);
+    }
+
+    // Private: Force release current owner
+    async _forceRelease() {
+        if (this.port && this.port.isOpen) {
+            console.log('[PortManager] Force closing port...');
+            await this._closePort();
+        }
+        this.owner = 'IDLE';
+        this.port = null;
+    }
+
+    // Private: Close port with "Cleanest Close" logic
+    async _closePort() {
+        if (!this.port || !this.port.isOpen) return;
+
+        const port = this.port;
+        this.port = null; // Detach immediately
+
+        try {
+            // Remove listeners
+            port.unpipe();
+            port.removeAllListeners();
+
+            // Clear signals
+            console.log('[PortManager] Clearing DTR/RTS...');
+            await new Promise(resolve => {
+                port.set({ dtr: false, rts: false }, () => resolve());
+            });
+
+            // Close immediately
+            console.log('[PortManager] Closing port...');
+            await new Promise(resolve => {
+                port.close(() => resolve());
+            });
+            console.log('[PortManager] Port closed successfully.');
+        } catch (e) {
+            console.warn('[PortManager] Error closing port:', e.message);
+        }
+    }
+}
+
+const portManager = new PortManager();
+
+const FLASH_PORT_READY_TIMEOUT_MS = 8000;
+const FLASH_PORT_READY_POLL_MS = 250;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function normalizePortPath(portPath) {
+    if (!portPath) return portPath;
+    if (os.platform() === 'darwin' && portPath.startsWith('/dev/tty.')) {
+        return portPath.replace('/dev/tty.', '/dev/cu.');
+    }
+    return portPath;
+}
+
+
 
 /**
  * Parse ioreg output to extract ESP32-S3 devices
@@ -141,10 +315,13 @@ function parseIoregOutput(ioregOutput) {
 /**
  * Find serial port path for a given USB serial number
  */
-async function findSerialPortPath(usbSerial) {
+async function findSerialPortPath(usbSerial, options = {}) {
+    const { log = true } = options;
     try {
         const ports = await SerialPort.list();
-        console.log('[Serial] Available ports:', ports.map(p => p.path));
+        if (log) {
+            console.log('[Serial] Available ports:', ports.map(p => p.path));
+        }
 
         // Try to find by serial number
         const port = ports.find(p => p.serialNumber === usbSerial);
@@ -157,7 +334,9 @@ async function findSerialPortPath(usbSerial) {
             p.manufacturer && p.manufacturer.toLowerCase().includes('espressif')
         );
         if (espPort) {
-            console.log('[Serial] Found Espressif port:', espPort.path);
+            if (log) {
+                console.log('[Serial] Found Espressif port:', espPort.path);
+            }
             return espPort.path;
         }
 
@@ -170,14 +349,22 @@ async function findSerialPortPath(usbSerial) {
 
 /**
  * Execute ioreg and detect ESP32-S3 devices
- * @returns {Promise<Array>} Array of detected devices
  */
 async function detectDevices() {
+    // Check if we can scan
+    if (portManager.getOwner() === 'FLASHING') {
+        console.log('[Device Detection] Skipped due to FLASHING');
+        return [];
+    }
+
+    // If MANUAL connection is active, we can still scan but shouldn't touch the open port
+    // For now, simple logic: if FLASHING, skip.
+
     try {
-        console.log('[Device Detection] Querying USB devices via ioreg...');
+        // console.log('[Device Detection] Querying USB devices via ioreg...'); // Reduce log spam
         const { stdout } = await execAsync('ioreg -p IOUSB -l -w 0');
         const devices = parseIoregOutput(stdout);
-        console.log(`[Device Detection] Found ${devices.length} ESP32-S3 device(s)`);
+        // console.log(`[Device Detection] Found ${devices.length} ESP32-S3 device(s)`);
         return devices;
     } catch (error) {
         console.error('[Device Detection] Error executing ioreg:', error.message);
@@ -189,30 +376,19 @@ async function detectDevices() {
  * Connect to serial port
  */
 async function connectToSerial(device) {
-    if (isConnecting || isFlashing) {
-        console.log(`[Serial] Connection skipped: isConnecting=${isConnecting}, isFlashing=${isFlashing}`);
-        return { success: false, error: 'Connection or flash in progress' };
+    const portPath = await findSerialPortPath(device.usbSerial);
+    if (!portPath) {
+        return { success: false, error: 'Port not found' };
+    }
+
+    // Acquire lock for MANUAL connection
+    const acquired = await portManager.acquire('MANUAL', portPath);
+    if (!acquired) {
+        return { success: false, error: `Port busy (Owner: ${portManager.getOwner()})` };
     }
 
     isConnecting = true;
     try {
-        // Close existing connection if any
-        if (connectedPort && connectedPort.isOpen) {
-            console.log('[Serial] Closing existing port...');
-            await new Promise((resolve) => {
-                connectedPort.close(() => {
-                    connectedPort = null;
-                    resolve();
-                });
-            });
-        }
-
-        const portPath = await findSerialPortPath(device.usbSerial);
-        if (!portPath) {
-            isConnecting = false;
-            throw new Error(`Could not find serial port for device ${device.usbSerial}`);
-        }
-
         console.log(`[Serial] Connecting to ${portPath}...`);
 
         const port = new SerialPort({
@@ -221,17 +397,17 @@ async function connectToSerial(device) {
             autoOpen: false
         });
 
-        // Return a promise that resolves when connection is established
         return new Promise((resolve, reject) => {
             const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
             port.on('open', () => {
                 console.log(`[Serial] Connected to ${portPath}`);
+                portManager.setPort(port); // Register port with manager
                 connectedPort = port;
                 connectedDevice = device;
                 isConnecting = false;
+                connectionEstablishedAt = Date.now();
 
-                // Broadcast connection status to all WebSocket clients
                 broadcastToClients({
                     type: 'serial-status',
                     status: 'connected',
@@ -243,38 +419,26 @@ async function connectToSerial(device) {
             });
 
             parser.on('data', (line) => {
-                // strict check: do not send data if we are flashing
-                if (isFlashing) {
-                    console.log('[Serial] Skipping data due to flashing');
-                    return;
-                }
+                lastDataTimestamp = Date.now();
+                // Strict check: only process data if we are the MANUAL owner
+                if (portManager.getOwner() !== 'MANUAL') return;
 
-                // Buffer data instead of sending immediately
-                console.log('[Serial] Data received:', line.substring(0, 50)); // Debug log
+                // Buffer data
                 serialBuffer.push(line);
-
-                // Cap buffer size to prevent memory issues with extreme spam
-                if (serialBuffer.length > 2000) {
-                    serialBuffer = serialBuffer.slice(-1000); // Keep last 1000 lines
-                }
+                if (serialBuffer.length > 2000) serialBuffer = serialBuffer.slice(-1000);
             });
 
             port.on('error', (err) => {
                 console.error(`[Serial] Error:`, err.message);
                 isConnecting = false;
+                // If error, release lock
+                portManager.release('MANUAL');
 
-                // Handle specific error cases
                 let errorMessage = err.message;
-                if (err.message.includes('Resource busy') || err.message.includes('cannot open')) {
-                    errorMessage = `Port ${portPath} is already in use. Please close any other programs (Arduino IDE, screen, etc.) that might be using this port.`;
+                if (err.message.includes('Resource busy')) {
+                    errorMessage = `Port ${portPath} is busy.`;
                 }
-
-                broadcastToClients({
-                    type: 'serial-error',
-                    error: errorMessage
-                });
-
-                // Reject on error during connection
+                broadcastToClients({ type: 'serial-error', error: errorMessage });
                 reject(new Error(errorMessage));
             });
 
@@ -285,17 +449,23 @@ async function connectToSerial(device) {
                 connectedPort = null;
                 connectedDevice = null;
                 isConnecting = false;
-                broadcastToClients({
-                    type: 'serial-status',
-                    status: 'disconnected'
-                });
+
+                // Only release if we were the owner (might have been preempted)
+                if (portManager.getOwner() === 'MANUAL') {
+                    portManager.release('MANUAL');
+                }
+
+                broadcastToClients({ type: 'serial-status', status: 'disconnected' });
             });
 
             // Start flush interval
             if (flushInterval) clearInterval(flushInterval);
             flushInterval = setInterval(() => {
+                if (portManager.getOwner() !== 'MANUAL') {
+                    serialBuffer = [];
+                    return;
+                }
                 if (serialBuffer.length > 0) {
-                    console.log(`[Serial] Flushing ${serialBuffer.length} lines`);
                     broadcastToClients({
                         type: 'serial-data',
                         data: serialBuffer,
@@ -303,24 +473,19 @@ async function connectToSerial(device) {
                     });
                     serialBuffer = [];
                 }
-            }, 100); // Flush every 100ms (throttled)
+            }, 16);
 
             port.open((err) => {
                 if (err) {
-                    if (flushInterval) clearInterval(flushInterval);
+                    portManager.release('MANUAL');
                     isConnecting = false;
-                    let errorMessage = err.message;
-                    if (err.message.includes('Resource busy') || err.message.includes('cannot open')) {
-                        errorMessage = `Port ${portPath} is already in use. Please close any other programs (Arduino IDE, screen, etc.) that might be using this port.`;
-                    }
-                    console.error(`[Serial] Failed to open port:`, errorMessage);
-                    reject(new Error(errorMessage));
+                    reject(err);
                 }
             });
         });
     } catch (error) {
+        portManager.release('MANUAL');
         isConnecting = false;
-        console.error('[Serial] Connection error:', error.message);
         return { success: false, error: error.message };
     }
 }
@@ -410,228 +575,111 @@ app.post('/api/serial/connect', async (req, res) => {
     }
 });
 
-// API endpoint to disconnect from serial port
+// API endpoint to disconnect
 app.post('/api/serial/disconnect', async (req, res) => {
     try {
-        if (connectedPort && connectedPort.isOpen) {
-            await new Promise((resolve) => {
-                connectedPort.close(resolve);
-            });
-        }
+        await portManager.release('MANUAL');
         res.json({ success: true });
     } catch (error) {
-        console.error('[API Error]', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// API endpoint to flash code to a device
+// API endpoint to flash code
 app.post('/api/flash', async (req, res) => {
     const { code, usbSerial, projectRoot, currentFilePath } = req.body;
-    if (!code || !usbSerial) {
-        return res.status(400).json({ success: false, error: 'Code and usbSerial are required' });
+    if (!code || !usbSerial) return res.status(400).json({ success: false, error: 'Missing args' });
+
+    // 1. Acquire FLASHING lock (this will preempt MANUAL connection)
+    const acquired = await portManager.acquire('FLASHING');
+    if (!acquired) {
+        return res.status(409).json({ success: false, error: 'Could not acquire port for flashing' });
     }
 
-    // 0. Immediate flag set to stop data flow
-    isFlashing = true;
-
+    const deviceToReconnect = connectedDevice;
+    cancelReconnection();
     let tempDir = null;
-    let wasConnected = false;
-    let deviceToReconnect = null;
 
     try {
-        // 1. Find the port
         const portPath = await findSerialPortPath(usbSerial);
-        if (!portPath) {
-            throw new Error(`Could not find serial port for device ${usbSerial}`);
-        }
+        if (!portPath) throw new Error('Port not found');
 
-        // 2. Pause serial connection if it's currently active
-        if (connectedPort && connectedPort.isOpen && connectedPort.path === portPath) {
-            console.log(`[Flash] Aggressively pausing serial connection on ${portPath}...`);
-            wasConnected = true;
-            deviceToReconnect = connectedDevice;
+        console.log(`[Flash] Starting flash on ${portPath}`);
 
-            // Immediately stop data flow to prevent lag
-            try {
-                connectedPort.unpipe();
-                connectedPort.removeAllListeners('data');
-                connectedPort.removeAllListeners('error');
+        // Broadcast start
+        broadcastToClients({
+            type: 'flash-status',
+            status: 'compiling',
+            message: 'Starting flash process...'
+        });
 
-                // Drain any pending data
-                console.log('[Flash] Draining port...');
-                await new Promise((resolve) => connectedPort.drain(resolve));
-
-                // Toggle DTR/RTS to force reset
-                console.log('[Flash] Toggling DTR/RTS for hard reset...');
-                await new Promise(resolve => connectedPort.set({ dtr: false, rts: true }, resolve));
-                await new Promise(resolve => setTimeout(resolve, 100));
-                await new Promise(resolve => connectedPort.set({ dtr: true, rts: false }, resolve));
-
-                // Flush any remaining data
-                await new Promise((resolve) => connectedPort.flush(resolve));
-            } catch (e) {
-                console.warn('[Flash] Error clearing listeners/resetting:', e.message);
-            }
-
-            await new Promise((resolve) => {
-                connectedPort.close(() => {
-                    resolve();
-                });
-            });
-            connectedPort = null; // Explicitly nullify immediately
-
-            broadcastToClients({ type: 'serial-status', status: 'disconnected' });
-            // Longer delay to ensure OS releases the port and device resets
-            await new Promise(resolve => setTimeout(resolve, 1500));
-        }
-
-        // 2.5 Force 1200bps touch for ESP32-S3 USB CDC bootloader entry
-        console.log(`[Flash] Waiting for port to settle...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        console.log(`[Flash] Triggering 1200bps touch on ${portPath}...`);
-        try {
-            const touchPort = new SerialPort({ path: portPath, baudRate: 1200, autoOpen: false });
-            await new Promise((resolve) => {
-                const timeout = setTimeout(() => {
-                    console.warn('[Flash] 1200bps touch timed out');
-                    resolve();
-                }, 5000); // Increased timeout for busy systems
-
-                touchPort.open(async (err) => {
-                    if (!err) {
-                        console.log('[Flash] 1200bps touch port opened, holding for 100ms...');
-                        // Hold the 1200bps connection briefly to ensure OS registers it
-                        await new Promise(r => setTimeout(r, 100));
-
-                        touchPort.close(() => {
-                            clearTimeout(timeout);
-                            resolve();
-                        });
-                    } else {
-                        console.warn(`[Flash] 1200bps touch open failed: ${err.message}`);
-                        clearTimeout(timeout);
-                        resolve();
-                    }
-                });
-            });
-            // Wait longer for device to re-enumerate in bootloader mode
-            console.log('[Flash] Waiting for device to enter bootloader...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        } catch (touchErr) {
-            console.warn(`[Flash] 1200bps touch error: ${touchErr.message}`);
-        }
-
-        isFlashing = true;
-
-        // 3. Create temporary sketch
+        // 2. Prepare temp dir and files
         const parentTempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ia-companion-'));
-
-        // Determine sketch name from currentFilePath or default to 'sketch'
         let sketchName = 'sketch';
-        if (currentFilePath) {
-            sketchName = path.basename(currentFilePath, path.extname(currentFilePath));
-        }
-
+        if (currentFilePath) sketchName = path.basename(currentFilePath, path.extname(currentFilePath));
         tempDir = path.join(parentTempDir, sketchName);
         await fs.mkdir(tempDir, { recursive: true });
 
         if (projectRoot) {
-            console.log(`[Flash] Copying project files from ${projectRoot} to ${tempDir}`);
-            // Copy all files from projectRoot to tempDir
             const entries = await fs.readdir(projectRoot, { withFileTypes: true });
             for (const entry of entries) {
                 if (entry.isFile()) {
                     const ext = path.extname(entry.name);
-                    // Only copy source files
                     if (['.ino', '.h', '.cpp', '.c', '.hpp'].includes(ext)) {
                         await fs.copyFile(path.join(projectRoot, entry.name), path.join(tempDir, entry.name));
                     }
                 }
             }
         }
+        await fs.writeFile(path.join(tempDir, `${sketchName}.ino`), code);
 
-        // Ensure the main .ino file exists and has the latest code
-        const mainInoPath = path.join(tempDir, `${sketchName}.ino`);
-        await fs.writeFile(mainInoPath, code);
+        // 3. Compile
+        const fqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default,UploadSpeed=115200';
+        const compileCmd = `arduino-cli compile --fqbn ${fqbn} "${tempDir}"`;
 
-        console.log(`[Flash] Compiling and flashing to ${portPath}...`);
-        broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling code...' });
+        broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling...' });
+        await execAsync(compileCmd, { timeout: 120000 });
 
-        // 4. Compile
-        const fqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default';
-        console.log(`[Flash] Using FQBN: ${fqbn}`);
-        try {
-            console.log(`[Flash] Compiling sketch in: ${tempDir}`);
-            const { stdout: compileOut, stderr: compileErr } = await execAsync(`arduino-cli compile --fqbn ${fqbn} "${tempDir}"`);
-            console.log('[Flash] Compile output:', compileOut);
-            if (compileErr) console.warn('[Flash] Compile warnings:', compileErr);
-        } catch (err) {
-            throw new Error(`Compilation failed: ${err.message}`);
-        }
+        // 4. Upload with Retries
+        const uploadCmd = `arduino-cli upload -p ${normalizePortPath(portPath)} --fqbn ${fqbn} "${tempDir}"`;
 
-        broadcastToClients({ type: 'flash-status', status: 'uploading', message: 'Uploading to device...' });
+        let uploadSuccess = false;
+        let lastError = null;
 
-        // 5. Upload
-        try {
-            console.log(`[Flash] Uploading to port: ${portPath}`);
-            const { stdout: uploadOut, stderr: uploadErr } = await execAsync(`arduino-cli upload -p ${portPath} --fqbn ${fqbn} "${tempDir}"`);
-            console.log('[Flash] Upload output:', uploadOut);
-            if (uploadErr) console.warn('[Flash] Upload warnings:', uploadErr);
-        } catch (err) {
-            throw new Error(`Upload failed: ${err.message}`);
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`[Flash] Upload attempt ${attempt}...`);
+                broadcastToClients({
+                    type: 'flash-status',
+                    status: 'uploading',
+                    message: attempt === 1 ? 'Uploading...' : `Retrying upload (Attempt ${attempt})...`
+                });
+
+                if (attempt > 1) await sleep(1000); // Small gap between retries
+
+                await execAsync(uploadCmd);
+                uploadSuccess = true;
+                break;
+            } catch (error) {
+                lastError = error;
+                const stderr = error.stderr || '';
+                const message = error.message || '';
+
+                const isRetryable = stderr.includes('Invalid head of packet') ||
+                    message.includes('Invalid head of packet') ||
+                    stderr.includes('Failed to connect to ESP32-S3') ||
+                    message.includes('Failed to connect to ESP32-S3');
+
+                if (isRetryable && attempt < 3) {
+                    console.warn(`[Flash] Attempt ${attempt} failed with retryable error. Retrying...`);
+                    continue;
+                } else {
+                    throw error; // Not retryable or last attempt
+                }
+            }
         }
 
         broadcastToClients({ type: 'flash-status', status: 'success', message: 'Flash successful!' });
-
-        // 6. Reconnect if it was connected before
-        if (wasConnected && deviceToReconnect) {
-            console.log(`[Flash] Reconnecting to ${portPath} (with retries)...`);
-
-            const maxRetries = 5;
-            let retryCount = 0;
-
-            const attemptReconnect = async () => {
-                try {
-                    console.log(`[Flash] Reconnection attempt ${retryCount + 1}/${maxRetries}...`);
-                    const result = await connectToSerial(deviceToReconnect);
-                    if (result.success) {
-                        console.log('[Flash] Reconnected successfully!');
-                        return true;
-                    }
-                } catch (err) {
-                    console.warn(`[Flash] Reconnection attempt ${retryCount + 1} failed: ${err.message}`);
-                }
-                return false;
-            };
-
-            const runRetryLoop = async () => {
-                while (retryCount < maxRetries) {
-                    // Wait a bit for the device to reset and OS to re-enumerate
-                    await new Promise(resolve => setTimeout(resolve, 1500 + (retryCount * 500)));
-
-                    const success = await attemptReconnect();
-                    if (success) break;
-
-                    retryCount++;
-                }
-
-                if (retryCount >= maxRetries) {
-                    console.error('[Flash] Failed to auto-reconnect after all attempts.');
-                    broadcastToClients({
-                        type: 'serial-error',
-                        error: 'Failed to auto-reconnect serial monitor. Please try connecting manually.'
-                    });
-                }
-            };
-
-            runRetryLoop();
-        }
-
         res.json({ success: true, message: 'Flash successful' });
 
     } catch (error) {
@@ -639,15 +687,23 @@ app.post('/api/flash', async (req, res) => {
         broadcastToClients({ type: 'flash-status', status: 'error', message: error.message });
         res.status(500).json({ success: false, error: error.message });
     } finally {
-        isFlashing = false;
-        // Cleanup temp files
+        // Release lock
+        await portManager.release('FLASHING');
+
         if (tempDir) {
-            try {
-                // Clean up the parent temp dir
-                await fs.rm(path.dirname(tempDir), { recursive: true, force: true });
-            } catch (err) {
-                console.error('[Flash] Cleanup error:', err.message);
-            }
+            try { await fs.rm(tempDir, { recursive: true, force: true }); } catch (e) { }
+        }
+
+        // Reconnect if we had a device
+        if (deviceToReconnect) {
+            console.log('[Flash] Attempting to reconnect to serial monitor...');
+            setTimeout(async () => {
+                try {
+                    await connectToSerial(deviceToReconnect);
+                } catch (e) {
+                    console.warn('[Flash] Auto-reconnect failed:', e.message);
+                }
+            }, 2000); // Give device time to boot
         }
     }
 });

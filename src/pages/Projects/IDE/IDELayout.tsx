@@ -23,7 +23,7 @@ interface Project {
 }
 
 const MOCK_PROJECTS: Project[] = [
-    { id: '1', name: 'Blink LED', type: 'code', path: '/Users/michaelcheng/Desktop/Test/Blink LED' },
+    { id: '1', name: 'Blink LED', type: 'code', path: '/Users/michaelcheng/Desktop/Test/Blink_LED' },
     { id: '2', name: 'Smart Home UI', type: 'design' },
     { id: '3', name: 'Sensor Logger', type: 'code' },
 ];
@@ -57,6 +57,25 @@ const IDELayout: React.FC = () => {
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
     const [selectedDeviceSerial, setSelectedDeviceSerial] = useState<string>(connectedDevice?.usbSerial || '');
+
+    // Ref for serial monitor auto-scroll optimization
+    const serialOutputRef = React.useRef<HTMLDivElement>(null);
+    const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
+
+    // Optimize serial monitor auto-scroll
+    React.useEffect(() => {
+        if (shouldAutoScroll && serialOutputRef.current) {
+            serialOutputRef.current.scrollTop = serialOutputRef.current.scrollHeight;
+        }
+    }, [serialData, shouldAutoScroll]);
+
+    // Detect if user has scrolled up (disable auto-scroll)
+    const handleSerialScroll = React.useCallback(() => {
+        if (!serialOutputRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = serialOutputRef.current;
+        const isAtBottom = scrollHeight - scrollTop - clientHeight < 50; // 50px threshold
+        setShouldAutoScroll(isAtBottom);
+    }, []);
 
     // Update active project when URL changes
     React.useEffect(() => {
@@ -417,7 +436,11 @@ const IDELayout: React.FC = () => {
                                             </div>
                                             <div className="terminal-content">
                                                 {activeTerminalId === 'serial' ? (
-                                                    <div className="terminal-output">
+                                                    <div
+                                                        className="terminal-output"
+                                                        ref={serialOutputRef}
+                                                        onScroll={handleSerialScroll}
+                                                    >
                                                         {isConnected ? (
                                                             serialData.length > 0 ? (
                                                                 serialData.map((line, index) => (
