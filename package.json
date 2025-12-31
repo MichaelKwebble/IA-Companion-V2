@@ -16,6 +16,7 @@
     "@google/generative-ai": "^0.24.1",
     "@monaco-editor/react": "^4.7.0",
     "ace-builds": "^1.43.4",
+    "adm-zip": "^0.5.16",
     "blockly": "^12.3.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",

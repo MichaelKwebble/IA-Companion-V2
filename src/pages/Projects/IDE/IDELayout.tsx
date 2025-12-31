@@ -13,6 +13,7 @@ import LayerManager from './components/LayerManager';
 import ComponentLibrary from './components/ComponentLibrary';
 import PropertiesPanel from './components/PropertiesPanel';
 import LessonToolbar from './components/LessonToolbar';
+import UpdateLibraryButton from './components/UpdateLibraryButton';
 import { useDevice } from '../../../context/DeviceContext';
 
 interface Project {
@@ -280,6 +281,7 @@ const IDELayout: React.FC = () => {
                                 ))}
                                 {devices.length === 0 && <option value="" disabled>No devices found</option>}
                             </select>
+                            <UpdateLibraryButton />
                             <button
                                 className="play-btn"
                                 onClick={handleUpload}

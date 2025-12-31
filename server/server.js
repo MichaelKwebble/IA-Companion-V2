@@ -17,7 +17,8 @@ const __dirname = path.dirname(__filename);
 const execAsync = promisify(exec);
 const app = express();
 const PORT = 3001;
-let currentProjectRoot = path.join(__dirname, '..');
+const APP_ROOT = path.join(__dirname, '..');
+let currentProjectRoot = APP_ROOT;
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -635,7 +636,8 @@ app.post('/api/flash', async (req, res) => {
 
         // 3. Compile
         const fqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default,UploadSpeed=115200';
-        const compileCmd = `arduino-cli compile --fqbn ${fqbn} "${tempDir}"`;
+        const libPath = path.join(APP_ROOT, 'IA_firmware', 'arduino-libraries');
+        const compileCmd = `arduino-cli compile --fqbn ${fqbn} --libraries "${libPath}" "${tempDir}"`;
 
         broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling...' });
         await execAsync(compileCmd, { timeout: 120000 });
@@ -718,8 +720,8 @@ app.get('/api/files', async (req, res) => {
             const resPath = path.resolve(dir, entry.name);
             const relPath = path.relative(projectRoot, resPath);
 
-            // Skip node_modules and .git
-            if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') {
+            // Skip node_modules, .git, dist, and IA_firmware
+            if (['node_modules', '.git', 'dist', 'IA_firmware'].includes(entry.name)) {
                 return null;
             }
 
