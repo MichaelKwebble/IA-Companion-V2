@@ -12,13 +12,60 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onCr
     const [projectName, setProjectName] = useState('');
     const [location, setLocation] = useState('/Users/michaelcheng/Desktop/Projects');
     const [enableAI, setEnableAI] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isCreating, setIsCreating] = useState(false);
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSelectDirectory = async () => {
+        // @ts-ignore
+        if (window.electron && window.electron.project) {
+            // @ts-ignore
+            const selectedPath = await window.electron.project.selectDirectory();
+            if (selectedPath) {
+                setLocation(selectedPath);
+            }
+        }
+    };
+
+    const validateName = (name: string) => {
+        const nameRegex = /^[a-zA-Z0-9_-]+$/;
+        if (!nameRegex.test(name)) {
+            return 'Project name can only contain letters, numbers, underscores, and hyphens (no spaces).';
+        }
+        return null;
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onCreate({ projectName, location, enableAI });
-        onClose();
+        setError(null);
+
+        const nameError = validateName(projectName);
+        if (nameError) {
+            setError(nameError);
+            return;
+        }
+
+        setIsCreating(true);
+        try {
+            const response = await fetch('http://localhost:3001/api/projects/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: projectName, location })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                onCreate(result.project);
+                onClose();
+            } else {
+                setError(result.error);
+            }
+        } catch (err: any) {
+            setError('Failed to create project: ' + err.message);
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     return (
@@ -49,10 +96,15 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onCr
                                 type="text"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
+                                readOnly
                             />
-                            <button type="button" className="icon-action"><Folder size={16} /></button>
+                            <button type="button" className="icon-action" onClick={handleSelectDirectory}>
+                                <Folder size={16} />
+                            </button>
                         </div>
                     </div>
+
+                    {error && <div className="error-message">{error}</div>}
 
                     <div className="form-group checkbox-group">
                         <label className="flex items-center gap-sm cursor-pointer">
@@ -67,8 +119,10 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onCr
                     </div>
 
                     <div className="modal-footer">
-                        <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="btn-primary">Create Project</button>
+                        <button type="button" className="btn-secondary" onClick={onClose} disabled={isCreating}>Cancel</button>
+                        <button type="submit" className="btn-primary" disabled={isCreating}>
+                            {isCreating ? 'Creating...' : 'Create Project'}
+                        </button>
                     </div>
                 </form>
             </div>

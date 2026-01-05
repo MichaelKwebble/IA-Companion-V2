@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
@@ -216,6 +216,17 @@ const updater = new LibraryUpdater();
 ipcMain.handle('library:check-update', () => updater.checkForUpdates());
 ipcMain.handle('library:update', (event, force) => updater.downloadAndInstall(force));
 ipcMain.handle('library:get-version', () => updater.getLocalVersion());
+
+ipcMain.handle('dialog:openDirectory', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        properties: ['openDirectory']
+    });
+    if (canceled) {
+        return null;
+    } else {
+        return filePaths[0];
+    }
+});
 
 app.whenReady().then(() => {
     createWindow();

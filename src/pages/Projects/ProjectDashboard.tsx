@@ -7,20 +7,31 @@ interface Project {
     id: string;
     name: string;
     type: 'code' | 'design';
+    path?: string;
     lastModified: string;
 }
-
-const MOCK_PROJECTS: Project[] = [
-    { id: '1', name: 'Blink LED', type: 'code', lastModified: '2 mins ago' },
-    { id: '2', name: 'Smart Home UI', type: 'design', lastModified: '1 hour ago' },
-    { id: '3', name: 'Sensor Logger', type: 'code', lastModified: '2 days ago' },
-];
 
 import NewProjectModal from './NewProjectModal';
 
 const ProjectDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [projects, setProjects] = useState<Project[]>([]);
+
+    React.useEffect(() => {
+        const fetchProjects = async () => {
+            try {
+                const response = await fetch('http://localhost:3001/api/projects');
+                const data = await response.json();
+                if (data.success) {
+                    setProjects(data.projects);
+                }
+            } catch (error) {
+                console.error('Failed to fetch projects:', error);
+            }
+        };
+        fetchProjects();
+    }, []);
 
     const handleCreateProject = (type: 'code' | 'design') => {
         if (type === 'code') {
@@ -32,10 +43,10 @@ const ProjectDashboard: React.FC = () => {
         }
     };
 
-    const handleModalSubmit = (data: any) => {
-        console.log('Creating project:', data);
-        const newId = Math.random().toString(36).substr(2, 9);
-        navigate(`/projects/${newId}?type=code&name=${encodeURIComponent(data.projectName)}`);
+    const handleModalSubmit = (project: Project) => {
+        console.log('Project created:', project);
+        setProjects(prev => [project, ...prev]);
+        navigate(`/projects/${project.id}?type=code&name=${encodeURIComponent(project.name)}`);
     };
 
     return (
@@ -58,7 +69,7 @@ const ProjectDashboard: React.FC = () => {
             </div>
 
             <div className="project-grid">
-                {MOCK_PROJECTS.map((project) => (
+                {projects.map((project) => (
                     <div key={project.id} className="project-card panel" onClick={() => navigate(`/projects/${project.id}?type=${project.type}`)}>
                         <div className="card-preview">
                             {project.type === 'code' ? <Code size={48} className="text-secondary" /> : <PenTool size={48} className="text-secondary" />}

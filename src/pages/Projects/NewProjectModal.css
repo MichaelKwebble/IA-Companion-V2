@@ -109,4 +109,11 @@
     justify-content: flex-end;
     gap: var(--space-sm);
     margin-top: var(--space-md);
+}.error-message {
+    color: #f44747;
+    font-size: var(--font-size-sm);
+    background-color: #fff1f0;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid #ffa39e;
 }

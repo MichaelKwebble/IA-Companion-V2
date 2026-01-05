@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('electron', {
         checkUpdate: () => ipcRenderer.invoke('library:check-update'),
         update: (force) => ipcRenderer.invoke('library:update', force),
         getVersion: () => ipcRenderer.invoke('library:get-version')
+    },
+    project: {
+        selectDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
     }
 });
 

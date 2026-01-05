@@ -12,12 +12,16 @@ interface DeviceContextType {
     connectionError: string | null;
     isConnecting: boolean;
     isFlashing: boolean;
+    flashProgress: number;
+    flashMessage: string;
     serialData: string[];
+    terminalLogs: string[];
     sensorConfig: any[];
     refresh: () => void;
     connectToDevice: (device: ESP32Device) => Promise<any>;
     disconnect: () => Promise<void>;
     sendCommand: (command: string) => void;
+    runTerminalCommand: (command: string) => void;
     flashCode: (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string) => Promise<any>;
     clearLog: () => void;
 }
@@ -30,10 +34,14 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isConnected,
         connectedDevice,
         serialData,
+        terminalLogs,
+        flashProgress,
+        flashMessage,
         sensorConfig,
         connectToDevice: serialConnect,
         disconnect,
         sendCommand,
+        runTerminalCommand,
         clearLog
     } = useSerialMonitor();
 
@@ -111,12 +119,16 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         connectionError,
         isConnecting,
         isFlashing,
+        flashProgress,
+        flashMessage,
         serialData,
+        terminalLogs,
         sensorConfig,
         refresh,
         connectToDevice,
         disconnect,
         sendCommand,
+        runTerminalCommand,
         flashCode,
         clearLog
     };

@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
@@ -18,6 +18,26 @@ const execAsync = promisify(exec);
 const app = express();
 const PORT = 3001;
 const APP_ROOT = path.join(__dirname, '..');
+const PROJECTS_FILE = path.join(APP_ROOT, 'projects.json');
+
+// Helper to load projects
+async function loadProjects() {
+    try {
+        const data = await fs.readFile(PROJECTS_FILE, 'utf-8');
+        return JSON.parse(data);
+    } catch (e) {
+        // Default projects if file doesn't exist
+        return [
+            { id: '1', name: 'Blink LED', type: 'code', path: '/Users/michaelcheng/Desktop/Test/Blink_LED', lastModified: '2 mins ago' },
+            { id: '2', name: 'Smart Home UI', type: 'design', lastModified: '1 hour ago' },
+        ];
+    }
+}
+
+// Helper to save projects
+async function saveProjects(projects) {
+    await fs.writeFile(PROJECTS_FILE, JSON.stringify(projects, null, 2), 'utf-8');
+}
 let currentProjectRoot = APP_ROOT;
 
 // Create HTTP server
@@ -523,6 +543,8 @@ wss.on('connection', (ws) => {
             // Handle commands from client
             if (data.command === 'write' && connectedPort && connectedPort.isOpen) {
                 connectedPort.write(data.data + '\n');
+            } else if (data.command === 'terminal') {
+                handleTerminalCommand(data.data);
             }
         } catch (error) {
             console.error('[WebSocket] Error:', error.message);
@@ -533,6 +555,52 @@ wss.on('connection', (ws) => {
         console.log('[WebSocket] Client disconnected');
     });
 });
+
+/**
+ * Handle terminal commands from the IDE
+ */
+async function handleTerminalCommand(command) {
+    const timestamp = new Date().toLocaleTimeString();
+    broadcastToClients({
+        type: 'terminal-log',
+        data: `user@ia-companion:~$ ${command}`,
+        timestamp
+    });
+
+    try {
+        // For now, only allow safe commands or specific IDE commands
+        // In a real app, you'd want a restricted shell or specific handlers
+        if (command === 'clear') {
+            broadcastToClients({ type: 'terminal-clear' });
+            return;
+        }
+
+        const { stdout, stderr } = await execAsync(command, { cwd: currentProjectRoot, timeout: 30000 });
+
+        if (stdout) {
+            broadcastToClients({
+                type: 'terminal-log',
+                data: stdout,
+                timestamp: new Date().toLocaleTimeString()
+            });
+        }
+        if (stderr) {
+            broadcastToClients({
+                type: 'terminal-log',
+                data: `stderr: ${stderr}`,
+                timestamp: new Date().toLocaleTimeString(),
+                isError: true
+            });
+        }
+    } catch (error) {
+        broadcastToClients({
+            type: 'terminal-log',
+            data: `Error: ${error.message}`,
+            timestamp: new Date().toLocaleTimeString(),
+            isError: true
+        });
+    }
+}
 
 // API endpoint to get detected devices
 app.get('/api/devices', async (req, res) => {
@@ -601,6 +669,77 @@ app.post('/api/flash', async (req, res) => {
     cancelReconnection();
     let tempDir = null;
 
+    /**
+     * Helper to run a command and stream progress
+     */
+    const runCommandWithProgress = (command, args, options = {}) => {
+        const { startProgress = 0, endProgress = 100, stage = 'Processing' } = options;
+
+        return new Promise((resolve, reject) => {
+            console.log(`[Flash] Running: ${command} ${args.join(' ')}`);
+            const child = spawn(command, args, { cwd: options.cwd || process.cwd() });
+            let lastProgress = -1;
+
+            child.stdout.on('data', (data) => {
+                const output = data.toString();
+                // console.log(`[Flash] ${stage} stdout: ${output}`); // Debug
+
+                // Parse esptool progress: "(8 %)"
+                const match = output.match(/\((\d+)\s*%\)/);
+                if (match) {
+                    const percent = parseInt(match[1]);
+                    const mappedProgress = Math.round(startProgress + (percent / 100) * (endProgress - startProgress));
+
+                    if (mappedProgress !== lastProgress) {
+                        lastProgress = mappedProgress;
+                        broadcastToClients({
+                            type: 'flash-status',
+                            status: options.status || 'processing',
+                            message: options.message || stage,
+                            progress: mappedProgress
+                        });
+                    }
+                }
+
+                // Parse compilation progress (arduino-cli compile --verbose)
+                if (stage === 'Compiling') {
+                    if (output.includes('Compiling sketch...')) setProgress(15);
+                    if (output.includes('Compiling libraries...')) setProgress(25);
+                    if (output.includes('Compiling core...')) setProgress(35);
+                    if (output.includes('Linking everything together...')) setProgress(38);
+                }
+            });
+
+            function setProgress(val) {
+                if (val > lastProgress) {
+                    lastProgress = val;
+                    broadcastToClients({
+                        type: 'flash-status',
+                        status: options.status || 'processing',
+                        message: options.message || stage,
+                        progress: val
+                    });
+                }
+            }
+
+            child.stderr.on('data', (data) => {
+                const output = data.toString();
+                // console.log(`[Flash] ${stage} stderr: ${output}`);
+            });
+
+            child.on('close', (code) => {
+                if (code === 0) resolve();
+                else {
+                    const err = new Error(`Command failed with code ${code}`);
+                    err.code = code;
+                    reject(err);
+                }
+            });
+
+            child.on('error', (err) => reject(err));
+        });
+    };
+
     try {
         const portPath = await findSerialPortPath(usbSerial);
         if (!portPath) throw new Error('Port not found');
@@ -611,7 +750,8 @@ app.post('/api/flash', async (req, res) => {
         broadcastToClients({
             type: 'flash-status',
             status: 'compiling',
-            message: 'Starting flash process...'
+            message: 'Starting flash process...',
+            progress: 5
         });
 
         // 2. Prepare temp dir and files
@@ -639,8 +779,18 @@ app.post('/api/flash', async (req, res) => {
         const libPath = path.join(APP_ROOT, 'IA_firmware', 'arduino-libraries');
         const compileCmd = `arduino-cli compile --fqbn ${fqbn} --libraries "${libPath}" "${tempDir}"`;
 
-        broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling...' });
-        await execAsync(compileCmd, { timeout: 120000 });
+        broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling...', progress: 10 });
+
+        // Compile using spawn to capture output if needed, but for now we'll just step it
+        await runCommandWithProgress('arduino-cli', [
+            'compile',
+            '--fqbn', fqbn,
+            '--libraries', libPath,
+            '--verbose',
+            tempDir
+        ], { startProgress: 10, endProgress: 40, stage: 'Compiling', status: 'compiling', message: 'Compiling...' });
+
+        broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compilation successful', progress: 40 });
 
         // 4. Upload with Retries
         const uploadCmd = `arduino-cli upload -p ${normalizePortPath(portPath)} --fqbn ${fqbn} "${tempDir}"`;
@@ -654,12 +804,19 @@ app.post('/api/flash', async (req, res) => {
                 broadcastToClients({
                     type: 'flash-status',
                     status: 'uploading',
-                    message: attempt === 1 ? 'Uploading...' : `Retrying upload (Attempt ${attempt})...`
+                    message: attempt === 1 ? 'Uploading...' : `Retrying upload (Attempt ${attempt})...`,
+                    progress: 40
                 });
 
                 if (attempt > 1) await sleep(1000); // Small gap between retries
 
-                await execAsync(uploadCmd);
+                await runCommandWithProgress('arduino-cli', [
+                    'upload',
+                    '-p', normalizePortPath(portPath),
+                    '--fqbn', fqbn,
+                    tempDir
+                ], { startProgress: 40, endProgress: 100, stage: 'Uploading', status: 'uploading', message: 'Uploading...' });
+
                 uploadSuccess = true;
                 break;
             } catch (error) {
@@ -681,7 +838,7 @@ app.post('/api/flash', async (req, res) => {
             }
         }
 
-        broadcastToClients({ type: 'flash-status', status: 'success', message: 'Flash successful!' });
+        broadcastToClients({ type: 'flash-status', status: 'success', message: 'Flash successful!', progress: 100 });
         res.json({ success: true, message: 'Flash successful' });
 
     } catch (error) {
@@ -803,6 +960,83 @@ app.post('/api/files/create', async (req, res) => {
 
         await fs.writeFile(fullPath, content || '', 'utf-8');
         res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to list projects
+app.get('/api/projects', async (req, res) => {
+    try {
+        const projects = await loadProjects();
+        res.json({ success: true, projects });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to create a new project
+app.post('/api/projects/create', async (req, res) => {
+    const { name, location } = req.body;
+    if (!name || !location) {
+        return res.status(400).json({ success: false, error: 'Name and location are required' });
+    }
+
+    // Validate name (no spaces or improper characters)
+    const nameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!nameRegex.test(name)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Project name can only contain letters, numbers, underscores, and hyphens (no spaces).'
+        });
+    }
+
+    try {
+        const projectDir = path.join(location, name);
+        const inoFile = path.join(projectDir, `${name}.ino`);
+
+        // Check if directory already exists
+        try {
+            await fs.access(projectDir);
+            return res.status(400).json({ success: false, error: 'Project directory already exists' });
+        } catch (e) {
+            // Directory does not exist, proceed
+        }
+
+        // Create directory
+        await fs.mkdir(projectDir, { recursive: true });
+
+        // Create .ino file with default content
+        const defaultContent = `#include "incipe.h"
+
+void setup () {
+  incipe.init();
+  Serial.begin(115200);
+}
+
+void loop () {
+  incipe.main();
+  Serial.println("hello world!");
+}
+`;
+        await fs.writeFile(inoFile, defaultContent, 'utf-8');
+
+        // Update projects list
+        const projects = await loadProjects();
+        const newProject = {
+            id: Math.random().toString(36).substr(2, 9),
+            name,
+            path: projectDir,
+            type: 'code',
+            lastModified: 'Just now'
+        };
+        projects.unshift(newProject);
+        await saveProjects(projects);
+
+        // Set as current project root
+        currentProjectRoot = projectDir;
+
+        res.json({ success: true, project: newProject });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

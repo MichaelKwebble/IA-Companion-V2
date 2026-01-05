@@ -3,12 +3,14 @@ import type { ESP32Device } from '../types/device';
 import type { SensorPort } from '../types/sensor';
 
 interface SerialMessage {
-    type: 'serial-data' | 'serial-status' | 'serial-error' | 'flash-status';
+    type: 'serial-data' | 'serial-status' | 'serial-error' | 'flash-status' | 'terminal-log' | 'terminal-clear';
     data?: string | string[];
     status?: 'connected' | 'disconnected' | 'compiling' | 'uploading' | 'success' | 'error';
     device?: ESP32Device;
     error?: string;
     message?: string;
+    progress?: number;
+    isError?: boolean;
     timestamp?: string;
 }
 
@@ -77,6 +79,9 @@ function connectGlobalWebSocket() {
 export function useSerialMonitor() {
     const [isConnected, setIsConnected] = useState(false);
     const [serialData, setSerialData] = useState<string[]>([]);
+    const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+    const [flashProgress, setFlashProgress] = useState<number>(0);
+    const [flashMessage, setFlashMessage] = useState<string>('');
     const [sensorConfig, setSensorConfig] = useState<SensorPort[]>([]);
     const [connectedDevice, setConnectedDevice] = useState<ESP32Device | null>(null);
     const bufferRef = useRef<string>('');
@@ -207,6 +212,18 @@ export function useSerialMonitor() {
                 command: 'write',
                 data: command
             }));
+            // Echo to serial monitor
+            setSerialData(prev => [...prev, `[TX] -> ${command}`]);
+        }
+    }, []);
+
+    const runTerminalCommand = useCallback((command: string) => {
+        const globalWs = getGlobalWs();
+        if (globalWs && globalWs.readyState === WebSocket.OPEN) {
+            globalWs.send(JSON.stringify({
+                command: 'terminal',
+                data: command
+            }));
         }
     }, []);
 
@@ -265,15 +282,24 @@ export function useSerialMonitor() {
 
                 case 'flash-status':
                     const flashTimestamp = new Date().toLocaleTimeString();
+                    setFlashProgress(message.progress || 0);
+                    setFlashMessage(message.message || '');
 
-                    // Clear serial data when flash starts to prevent interference
-                    if (message.status === 'compiling' || message.status === 'uploading') {
-                        console.log('[Serial] Clearing serial data for flash operation');
-                        setSerialData([`${flashTimestamp} [Flash] ${message.message}`]);
-                        bufferRef.current = '';
-                    } else {
-                        setSerialData(prev => [...prev, `${flashTimestamp} [Flash] ${message.message}`]);
-                    }
+                    setTerminalLogs(prev => {
+                        const updated = [...prev, `[${flashTimestamp}] [Flash] ${message.message}`];
+                        return updated.slice(-500);
+                    });
+                    break;
+
+                case 'terminal-log':
+                    setTerminalLogs(prev => {
+                        const updated = [...prev, message.data as string];
+                        return updated.slice(-500);
+                    });
+                    break;
+
+                case 'terminal-clear':
+                    setTerminalLogs([]);
                     break;
             }
         };
@@ -293,11 +319,15 @@ export function useSerialMonitor() {
     return {
         isConnected,
         serialData,
+        terminalLogs,
+        flashProgress,
+        flashMessage,
         sensorConfig,
         connectedDevice,
         connectToDevice,
         disconnect,
         sendCommand,
+        runTerminalCommand,
         clearLog
     };
 }

@@ -23,12 +23,6 @@ interface Project {
     path?: string;
 }
 
-const MOCK_PROJECTS: Project[] = [
-    { id: '1', name: 'Blink LED', type: 'code', path: '/Users/michaelcheng/Desktop/Test/Blink_LED' },
-    { id: '2', name: 'Smart Home UI', type: 'design' },
-    { id: '3', name: 'Sensor Logger', type: 'code' },
-];
-
 const IDELayout: React.FC = () => {
     const [searchParams] = useSearchParams();
     const lessonId = searchParams.get('lessonId');
@@ -36,11 +30,31 @@ const IDELayout: React.FC = () => {
     const isLessonMode = !!(lessonId && classId);
 
     // Use global device context
-    const { isConnected, serialData, devices, connectedDevice, isFlashing, flashCode } = useDevice();
+    const {
+        isConnected, serialData, terminalLogs,
+        devices, connectedDevice,
+        isFlashing, flashProgress, flashMessage,
+        flashCode, sendCommand, runTerminalCommand
+    } = useDevice();
 
     const { projectId } = useParams();
     const [activeProjectId, setActiveProjectId] = useState(projectId || '1');
-    const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
+    const [projects, setProjects] = useState<Project[]>([]);
+
+    React.useEffect(() => {
+        const fetchProjects = async () => {
+            try {
+                const response = await fetch('http://localhost:3001/api/projects');
+                const data = await response.json();
+                if (data.success) {
+                    setProjects(data.projects);
+                }
+            } catch (error) {
+                console.error('Failed to fetch projects:', error);
+            }
+        };
+        fetchProjects();
+    }, []);
     const [activeTab, setActiveTab] = useState<'files' | 'blocks' | 'ai'>('files');
     const [isTerminalOpen, setIsTerminalOpen] = useState(true);
     const [activeTerminalId, setActiveTerminalId] = useState('1');
@@ -58,6 +72,8 @@ const IDELayout: React.FC = () => {
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
     const [selectedDeviceSerial, setSelectedDeviceSerial] = useState<string>(connectedDevice?.usbSerial || '');
+    const [serialInput, setSerialInput] = useState('');
+    const [terminalInput, setTerminalInput] = useState('');
 
     // Ref for serial monitor auto-scroll optimization
     const serialOutputRef = React.useRef<HTMLDivElement>(null);
@@ -132,8 +148,31 @@ const IDELayout: React.FC = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [currentFilePath, code]); // Need code in deps to save latest version
 
-    const activeProject = projects.find(p => p.id === activeProjectId) || projects[0];
-    const isDesignMode = activeProject.type === 'design';
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    const isDesignMode = activeProject?.type === 'design';
+
+    // Handle fallback if active project not found
+    React.useEffect(() => {
+        if (projects.length > 0 && !activeProject) {
+            const fallback = projects[0];
+            if (fallback) {
+                setActiveProjectId(fallback.id);
+            }
+        }
+    }, [projects, activeProject]);
+
+    if (projects.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600 font-medium">Loading projects...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!activeProject) return null;
 
     const handleCheckCode = () => {
         // Simple code validation
@@ -198,11 +237,29 @@ const IDELayout: React.FC = () => {
         }
 
         setIsTerminalOpen(true);
-        setActiveTerminalId('serial');
+        setActiveTerminalId('serial'); // Or '1' for terminal? User said "compiling/flashing should be seen in terminal"
+        // Let's switch to a terminal tab for flashing
+        setActiveTerminalId('1');
 
         const result = await flashCode(code, selectedDeviceSerial, projectRoot || undefined, currentFilePath || undefined);
         if (!result.success) {
             alert(`Upload failed: ${result.error}`);
+        }
+    };
+
+    const handleSerialSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (serialInput.trim()) {
+            sendCommand(serialInput.trim());
+            setSerialInput('');
+        }
+    };
+
+    const handleTerminalSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (terminalInput.trim()) {
+            runTerminalCommand(terminalInput.trim());
+            setTerminalInput('');
         }
     };
 
@@ -438,36 +495,87 @@ const IDELayout: React.FC = () => {
                                             </div>
                                             <div className="terminal-content">
                                                 {activeTerminalId === 'serial' ? (
-                                                    <div
-                                                        className="terminal-output"
-                                                        ref={serialOutputRef}
-                                                        onScroll={handleSerialScroll}
-                                                    >
-                                                        {isConnected ? (
-                                                            serialData.length > 0 ? (
-                                                                serialData.map((line, index) => (
-                                                                    <React.Fragment key={index}>
-                                                                        <span className={line.includes('ERROR') ? 'error' : line.includes('>') ? 'info' : 'output'}>
-                                                                            {line}
-                                                                        </span>
-                                                                        <br />
-                                                                    </React.Fragment>
-                                                                ))
+                                                    <div className="terminal-wrapper">
+                                                        <div
+                                                            className="terminal-output"
+                                                            ref={serialOutputRef}
+                                                            onScroll={handleSerialScroll}
+                                                        >
+                                                            {isConnected ? (
+                                                                serialData.length > 0 ? (
+                                                                    serialData.map((line, index) => (
+                                                                        <React.Fragment key={index}>
+                                                                            <span className={line.includes('ERROR') ? 'error' : line.includes('[TX]') ? 'info' : 'output'}>
+                                                                                {line}
+                                                                            </span>
+                                                                            <br />
+                                                                        </React.Fragment>
+                                                                    ))
+                                                                ) : (
+                                                                    <span className="info">&gt; Waiting for serial data...</span>
+                                                                )
                                                             ) : (
-                                                                <span className="info">&gt; Waiting for serial data...</span>
-                                                            )
-                                                        ) : (
-                                                            <span className="info">&gt; Serial monitor not connected. Connect a device from the Home page.</span>
-                                                        )}
+                                                                <span className="info">&gt; Serial monitor not connected. Connect a device from the Home page.</span>
+                                                            )}
+                                                        </div>
+                                                        <form className="terminal-input-area" onSubmit={handleSerialSubmit}>
+                                                            <span className="prompt">&gt;</span>
+                                                            <input
+                                                                type="text"
+                                                                value={serialInput}
+                                                                onChange={(e) => setSerialInput(e.target.value)}
+                                                                placeholder="Send serial command..."
+                                                                disabled={!isConnected}
+                                                            />
+                                                        </form>
                                                     </div>
                                                 ) : (
-                                                    <div className="terminal-output">
-                                                        <span className="prompt">user@ia-companion:~$</span> npm run dev<br />
-                                                        <span className="success">Build completed successfully.</span><br />
-                                                        <span className="info">Listening on port 3000...</span>
+                                                    <div className="terminal-wrapper">
+                                                        <div className="terminal-output">
+                                                            {terminalLogs.length > 0 ? (
+                                                                terminalLogs.map((log, index) => (
+                                                                    <div key={index} className="terminal-line">
+                                                                        {log.startsWith('user@ia-companion') ? (
+                                                                            <span className="prompt">{log}</span>
+                                                                        ) : log.includes('Error') || log.includes('stderr') ? (
+                                                                            <span className="error">{log}</span>
+                                                                        ) : (
+                                                                            <span>{log}</span>
+                                                                        )}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <span className="info">Terminal ready.</span>
+                                                            )}
+                                                        </div>
+                                                        <form className="terminal-input-area" onSubmit={handleTerminalSubmit}>
+                                                            <span className="prompt">user@ia-companion:~$</span>
+                                                            <input
+                                                                type="text"
+                                                                value={terminalInput}
+                                                                onChange={(e) => setTerminalInput(e.target.value)}
+                                                                placeholder="Run terminal command..."
+                                                            />
+                                                        </form>
                                                     </div>
                                                 )}
                                             </div>
+                                            {isFlashing && (
+                                                <div className="flash-progress-overlay">
+                                                    <div className="flash-progress-container">
+                                                        <div className="flash-progress-header">
+                                                            <span>{flashMessage}</span>
+                                                            <span>{flashProgress}%</span>
+                                                        </div>
+                                                        <div className="flash-progress-bar-bg">
+                                                            <div
+                                                                className="flash-progress-bar-fill"
+                                                                style={{ width: `${flashProgress}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </Panel>
                                     </>
                                 ) : (
