@@ -16,6 +16,7 @@ interface DeviceContextType {
     flashMessage: string;
     serialData: string[];
     terminalLogs: string[];
+    arduinoLogs: { text: string; isError?: boolean }[];
     sensorConfig: any[];
     refresh: () => void;
     connectToDevice: (device: ESP32Device) => Promise<any>;
@@ -38,6 +39,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         flashProgress,
         flashMessage,
         sensorConfig,
+        arduinoLogs,
         connectToDevice: serialConnect,
         disconnect,
         sendCommand,
@@ -123,6 +125,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         flashMessage,
         serialData,
         terminalLogs,
+        arduinoLogs,
         sensorConfig,
         refresh,
         connectToDevice,

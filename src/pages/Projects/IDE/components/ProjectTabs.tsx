@@ -6,6 +6,7 @@ export interface ProjectTab {
     id: string;
     name: string;
     type: 'code' | 'design';
+    isDirty?: boolean;
 }
 
 interface ProjectTabsProps {
@@ -23,9 +24,10 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({ projects, activeId, onSwitch,
                 {projects.map(project => (
                     <div
                         key={project.id}
-                        className={`project-tab ${project.id === activeId ? 'active' : ''}`}
+                        className={`project-tab ${project.id === activeId ? 'active' : ''} ${project.isDirty ? 'dirty' : ''}`}
                         onClick={() => onSwitch(project.id)}
                     >
+                        {project.isDirty && <div className="dirty-indicator" />}
                         <span className="tab-name">{project.name}</span>
                         <button
                             className="tab-close"
@@ -34,7 +36,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({ projects, activeId, onSwitch,
                                 onClose(project.id);
                             }}
                         >
-                            <X size={12} />
+                            <X size={20} />
                         </button>
                     </div>
                 ))}

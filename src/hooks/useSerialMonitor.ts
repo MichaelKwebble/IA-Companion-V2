@@ -3,9 +3,9 @@ import type { ESP32Device } from '../types/device';
 import type { SensorPort } from '../types/sensor';
 
 interface SerialMessage {
-    type: 'serial-data' | 'serial-status' | 'serial-error' | 'flash-status' | 'terminal-log' | 'terminal-clear';
+    type: 'serial-data' | 'serial-status' | 'serial-error' | 'flash-status' | 'terminal-log' | 'terminal-clear' | 'arduino-log' | 'arduino-status';
     data?: string | string[];
-    status?: 'connected' | 'disconnected' | 'compiling' | 'uploading' | 'success' | 'error';
+    status?: 'connected' | 'disconnected' | 'compiling' | 'uploading' | 'success' | 'error' | 'starting' | 'running' | 'done';
     device?: ESP32Device;
     error?: string;
     message?: string;
@@ -83,6 +83,7 @@ export function useSerialMonitor() {
     const [flashProgress, setFlashProgress] = useState<number>(0);
     const [flashMessage, setFlashMessage] = useState<string>('');
     const [sensorConfig, setSensorConfig] = useState<SensorPort[]>([]);
+    const [arduinoLogs, setArduinoLogs] = useState<{ text: string; isError?: boolean }[]>([]);
     const [connectedDevice, setConnectedDevice] = useState<ESP32Device | null>(null);
     const bufferRef = useRef<string>('');
 
@@ -301,6 +302,17 @@ export function useSerialMonitor() {
                 case 'terminal-clear':
                     setTerminalLogs([]);
                     break;
+
+                case 'arduino-log':
+                    setArduinoLogs(prev => {
+                        const updated = [...prev, { text: message.data as string, isError: message.isError }];
+                        return updated.slice(-1000);
+                    });
+                    break;
+
+                case 'arduino-status':
+                    setArduinoLogs(prev => [...prev, { text: `[Status] ${message.status}: ${message.message || ''}`, isError: message.status === 'error' }]);
+                    break;
             }
         };
 
@@ -323,6 +335,7 @@ export function useSerialMonitor() {
         flashProgress,
         flashMessage,
         sensorConfig,
+        arduinoLogs,
         connectedDevice,
         connectToDevice,
         disconnect,

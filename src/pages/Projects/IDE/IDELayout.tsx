@@ -4,7 +4,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus } from 'lucide-react';
 import './IDELayout.css';
 import FileExplorer from './components/FileExplorer';
-import CodeEditor from './components/CodeEditor';
+import CodeEditor, { type CodeEditorHandle } from './components/CodeEditor';
 import BlockLibrary from './components/BlockLibrary';
 import ChatWorkspace from './components/ChatWorkspace';
 import ProjectTabs from './components/ProjectTabs';
@@ -14,6 +14,7 @@ import ComponentLibrary from './components/ComponentLibrary';
 import PropertiesPanel from './components/PropertiesPanel';
 import LessonToolbar from './components/LessonToolbar';
 import UpdateLibraryButton from './components/UpdateLibraryButton';
+import ArduinoManagerModal from './components/ArduinoManagerModal';
 import { useDevice } from '../../../context/DeviceContext';
 
 interface Project {
@@ -60,9 +61,12 @@ const IDELayout: React.FC = () => {
     const [activeTerminalId, setActiveTerminalId] = useState('1');
     const [terminals, setTerminals] = useState([{ id: '1', name: 'Terminal 1', type: 'terminal' }]);
     const [code, setCode] = useState('// Arduino Setup\nvoid setup() {\n  // put your setup code here, to run once:\n}\n\nvoid loop() {\n  // put your main code here, to run repeatedly:\n}');
+    const [savedCode, setSavedCode] = useState(code);
     const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
     const [projectRoot, setProjectRoot] = useState<string | null>(null);
     const [isCreatingFile, setIsCreatingFile] = useState(false);
+    const [isArduinoManagerOpen, setIsArduinoManagerOpen] = useState(false);
+    const editorRef = React.useRef<CodeEditorHandle>(null);
 
     const [elements, setElements] = useState<UIElement[]>([
         { id: '1', type: 'rect', x: 100, y: 100, width: 375, height: 812, style: { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '40px' }, name: 'iPhone 13 Frame' },
@@ -74,6 +78,11 @@ const IDELayout: React.FC = () => {
     const [selectedDeviceSerial, setSelectedDeviceSerial] = useState<string>(connectedDevice?.usbSerial || '');
     const [serialInput, setSerialInput] = useState('');
     const [terminalInput, setTerminalInput] = useState('');
+
+    // Unsaved changes tracking
+    const [isDirty, setIsDirty] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const isLoadingFile = React.useRef(false);
 
     // Ref for serial monitor auto-scroll optimization
     const serialOutputRef = React.useRef<HTMLDivElement>(null);
@@ -127,6 +136,34 @@ const IDELayout: React.FC = () => {
                         setProjectRoot(data.root);
                         // Clear current file when switching projects
                         setCurrentFilePath(null);
+
+                        // Automatically open the .ino file if no file is open
+                        try {
+                            const filesResponse = await fetch('http://localhost:3001/api/files');
+                            const filesData = await filesResponse.json();
+                            if (filesData.success && filesData.files.length > 0) {
+                                // Find the first .ino file
+                                const findInoFile = (nodes: any[]): string | null => {
+                                    for (const node of nodes) {
+                                        if (node.type === 'file' && node.name.endsWith('.ino')) {
+                                            return node.id;
+                                        }
+                                        if (node.type === 'folder' && node.children) {
+                                            const found = findInoFile(node.children);
+                                            if (found) return found;
+                                        }
+                                    }
+                                    return null;
+                                };
+
+                                const inoPath = findInoFile(filesData.files);
+                                if (inoPath) {
+                                    handleFileSelect(inoPath);
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Failed to auto-open .ino file:', err);
+                        }
                     }
                 } catch (error) {
                     console.error('Failed to sync project root:', error);
@@ -147,6 +184,23 @@ const IDELayout: React.FC = () => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [currentFilePath, code]); // Need code in deps to save latest version
+
+    // Track code changes for dirty state
+    React.useEffect(() => {
+        if (!isLoadingFile.current && currentFilePath) {
+            setIsDirty(code !== savedCode);
+        } else {
+            setIsDirty(false);
+        }
+    }, [code, savedCode, currentFilePath]);
+
+    // Clear save status after a delay
+    React.useEffect(() => {
+        if (saveStatus === 'saved' || saveStatus === 'error') {
+            const timer = setTimeout(() => setSaveStatus('idle'), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [saveStatus]);
 
     const activeProject = projects.find(p => p.id === activeProjectId);
     const isDesignMode = activeProject?.type === 'design';
@@ -188,15 +242,20 @@ const IDELayout: React.FC = () => {
 
     const handleFileSelect = async (filePath: string) => {
         try {
+            isLoadingFile.current = true;
             const response = await fetch(`http://localhost:3001/api/files/read?filePath=${encodeURIComponent(filePath)}`);
             const data = await response.json();
             if (data.success) {
                 setCode(data.content);
+                setSavedCode(data.content);
                 setCurrentFilePath(filePath);
+                setIsDirty(false);
             }
         } catch (error) {
             console.error('Failed to read file:', error);
             alert('Failed to open file');
+        } finally {
+            isLoadingFile.current = false;
         }
     };
 
@@ -206,6 +265,7 @@ const IDELayout: React.FC = () => {
             return;
         }
 
+        setSaveStatus('saving');
         try {
             const response = await fetch('http://localhost:3001/api/files/write', {
                 method: 'POST',
@@ -216,8 +276,12 @@ const IDELayout: React.FC = () => {
             if (!data.success) {
                 throw new Error(data.error);
             }
+            setSavedCode(code);
+            setIsDirty(false);
+            setSaveStatus('saved');
         } catch (error) {
             console.error('Failed to save file:', error);
+            setSaveStatus('error');
             alert(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`);
             return false;
         }
@@ -263,11 +327,27 @@ const IDELayout: React.FC = () => {
         }
     };
 
+    const handleSwitchProject = (id: string) => {
+        if (isDirty && activeProjectId !== id) {
+            if (!confirm('You have unsaved changes. Are you sure you want to switch projects? Your changes will be lost.')) {
+                return;
+            }
+        }
+        setActiveProjectId(id);
+        setIsDirty(false);
+    };
+
     const handleCloseProject = (id: string) => {
+        if (isDirty && activeProjectId === id) {
+            if (!confirm('You have unsaved changes. Are you sure you want to close this project? Your changes will be lost.')) {
+                return;
+            }
+        }
         const newProjects = projects.filter(p => p.id !== id);
         setProjects(newProjects);
         if (activeProjectId === id && newProjects.length > 0) {
             setActiveProjectId(newProjects[0].id);
+            setIsDirty(false);
         }
     };
 
@@ -288,6 +368,9 @@ const IDELayout: React.FC = () => {
         setActiveTerminalId(newId);
     };
 
+    const handleUndo = () => editorRef.current?.undo();
+    const handleRedo = () => editorRef.current?.redo();
+
     return (
         <div className="ide-container">
             {/* Lesson Toolbar - only shown when accessed from lesson */}
@@ -302,9 +385,12 @@ const IDELayout: React.FC = () => {
             {/* Top Project Tabs - hidden in lesson mode */}
             {!isLessonMode && (
                 <ProjectTabs
-                    projects={projects}
+                    projects={projects.map(p => ({
+                        ...p,
+                        isDirty: p.id === activeProjectId ? isDirty : false
+                    }))}
                     activeId={activeProjectId}
-                    onSwitch={setActiveProjectId}
+                    onSwitch={handleSwitchProject}
                     onClose={handleCloseProject}
                     onNew={() => console.log('New Project')}
                 />
@@ -313,15 +399,25 @@ const IDELayout: React.FC = () => {
             {/* Main Toolbar */}
             <div className="ide-toolbar">
                 <div className="toolbar-left">
-                    <button className="icon-btn" onClick={handleSave} title="Save File"><Save size={18} /></button>
+                    <button className="icon-btn" onClick={handleSave} title="Save File">
+                        <Save size={18} />
+                        {isDirty && <div className="save-dot" />}
+                    </button>
                     <div className="divider" />
-                    <button className="icon-btn"><Undo size={18} /></button>
-                    <button className="icon-btn"><Redo size={18} /></button>
+                    <button className="icon-btn" onClick={handleUndo} title="Undo"><Undo size={18} /></button>
+                    <button className="icon-btn" onClick={handleRedo} title="Redo"><Redo size={18} /></button>
                 </div>
                 <div className="toolbar-center">
                     <span className="project-name">{activeProject.name}</span>
                 </div>
                 <div className="toolbar-right">
+                    {saveStatus !== 'idle' && (
+                        <div className={`save-notification ${saveStatus}`}>
+                            {saveStatus === 'saving' && 'Saving...'}
+                            {saveStatus === 'saved' && 'Save complete'}
+                            {saveStatus === 'error' && 'Save failed'}
+                        </div>
+                    )}
                     {!isDesignMode && (
                         <>
                             <select
@@ -338,6 +434,14 @@ const IDELayout: React.FC = () => {
                                 ))}
                                 {devices.length === 0 && <option value="" disabled>No devices found</option>}
                             </select>
+                            <button
+                                className="icon-btn"
+                                onClick={() => setIsArduinoManagerOpen(true)}
+                                title="Arduino Boards & Library Manager"
+                                style={{ marginRight: '8px' }}
+                            >
+                                <Box size={18} />
+                            </button>
                             <UpdateLibraryButton />
                             <button
                                 className="play-btn"
@@ -427,6 +531,7 @@ const IDELayout: React.FC = () => {
                                     key={projectRoot}
                                     isCreating={isCreatingFile}
                                     setIsCreating={setIsCreatingFile}
+                                    activeFilePath={currentFilePath}
                                 />
                             ))}
                             {activeTab === 'blocks' && (isDesignMode ? <ComponentLibrary /> : <BlockLibrary />)}
@@ -449,7 +554,7 @@ const IDELayout: React.FC = () => {
                             <PanelGroup direction="vertical">
                                 <Panel className="editor-panel">
                                     {currentFilePath ? (
-                                        <CodeEditor code={code} onChange={setCode} />
+                                        <CodeEditor ref={editorRef} code={code} onChange={setCode} />
                                     ) : (
                                         <div className="editor-empty-state">
                                             <div className="empty-state-content">
@@ -604,6 +709,11 @@ const IDELayout: React.FC = () => {
                     )}
                 </PanelGroup>
             </div>
+
+            {/* Arduino Manager Modal */}
+            {isArduinoManagerOpen && (
+                <ArduinoManagerModal onClose={() => setIsArduinoManagerOpen(false)} />
+            )}
         </div>
     );
 };

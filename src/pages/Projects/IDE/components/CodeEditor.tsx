@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 
 interface CodeEditorProps {
@@ -6,8 +6,26 @@ interface CodeEditorProps {
     onChange: (newCode: string) => void;
 }
 
-const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
+export interface CodeEditorHandle {
+    undo: () => void;
+    redo: () => void;
+}
+
+const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange }, ref) => {
     const editorRef = useRef<any>(null);
+
+    useImperativeHandle(ref, () => ({
+        undo: () => {
+            if (editorRef.current) {
+                editorRef.current.trigger('keyboard', 'undo', null);
+            }
+        },
+        redo: () => {
+            if (editorRef.current) {
+                editorRef.current.trigger('keyboard', 'redo', null);
+            }
+        }
+    }));
 
     const handleEditorDidMount: OnMount = (editor) => {
         editorRef.current = editor;
@@ -110,6 +128,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
             />
         </div>
     );
-};
+});
 
 export default CodeEditor;

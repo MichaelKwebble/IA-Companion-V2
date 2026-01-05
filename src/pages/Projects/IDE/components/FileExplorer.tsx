@@ -11,8 +11,14 @@ interface FileNode {
 
 
 
-const FileItem: React.FC<{ node: FileNode; depth: number; onFileSelect: (path: string) => void }> = ({ node, depth, onFileSelect }) => {
+const FileItem: React.FC<{
+    node: FileNode;
+    depth: number;
+    onFileSelect: (path: string) => void;
+    activeFilePath: string | null;
+}> = ({ node, depth, onFileSelect, activeFilePath }) => {
     const [isOpen, setIsOpen] = useState(true);
+    const isActive = activeFilePath === node.id;
 
     const handleToggle = () => {
         if (node.type === 'folder') {
@@ -25,7 +31,7 @@ const FileItem: React.FC<{ node: FileNode; depth: number; onFileSelect: (path: s
     return (
         <>
             <div
-                className={`explorer-item ${node.type === 'file' ? 'is-file' : ''}`}
+                className={`explorer-item ${node.type === 'file' ? 'is-file' : ''} ${isActive ? 'active' : ''}`}
                 style={{ paddingLeft: `${depth * 12 + 8}px` }}
                 onClick={handleToggle}
             >
@@ -42,7 +48,13 @@ const FileItem: React.FC<{ node: FileNode; depth: number; onFileSelect: (path: s
             {node.type === 'folder' && isOpen && node.children && (
                 <>
                     {node.children.map(child => (
-                        <FileItem key={child.id} node={child} depth={depth + 1} onFileSelect={onFileSelect} />
+                        <FileItem
+                            key={child.id}
+                            node={child}
+                            depth={depth + 1}
+                            onFileSelect={onFileSelect}
+                            activeFilePath={activeFilePath}
+                        />
                     ))}
                 </>
             )}
@@ -55,9 +67,10 @@ interface FileExplorerProps {
     onCreateFile?: (name: string) => Promise<void>;
     isCreating?: boolean;
     setIsCreating?: (val: boolean) => void;
+    activeFilePath: string | null;
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, isCreating, setIsCreating }) => {
+const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, isCreating, setIsCreating, activeFilePath }) => {
     const [files, setFiles] = useState<FileNode[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [newFileName, setNewFileName] = useState('');
@@ -144,7 +157,13 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, isCreating, s
                     </form>
                 )}
                 {files.map(node => (
-                    <FileItem key={node.id} node={node} depth={0} onFileSelect={onFileSelect} />
+                    <FileItem
+                        key={node.id}
+                        node={node}
+                        depth={0}
+                        onFileSelect={onFileSelect}
+                        activeFilePath={activeFilePath}
+                    />
                 ))}
             </div>
         </div>

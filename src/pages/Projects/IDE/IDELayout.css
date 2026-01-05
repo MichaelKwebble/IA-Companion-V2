@@ -30,11 +30,73 @@
     justify-content: center;
     border-radius: var(--radius-sm);
     color: var(--color-text-secondary);
+    position: relative;
+    /* Added for save-dot */
 }
 
 .icon-btn:hover {
     background-color: var(--color-bg-hover);
     color: var(--color-text-primary);
+}
+
+.save-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 6px;
+    height: 6px;
+    background-color: #ff4d4f;
+    border-radius: 50%;
+    border: 1px solid var(--color-bg-panel);
+}
+
+.save-notification {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    animation: fadeInOut 3s forwards;
+    margin-right: 12px;
+}
+
+.save-notification.saving {
+    background-color: #e6f7ff;
+    color: #1890ff;
+    border: 1px solid #91d5ff;
+}
+
+.save-notification.saved {
+    background-color: #f6ffed;
+    color: #52c41a;
+    border: 1px solid #b7eb8f;
+}
+
+.save-notification.error {
+    background-color: #fff1f0;
+    color: #ff4d4f;
+    border: 1px solid #ffa39e;
+}
+
+@keyframes fadeInOut {
+    0% {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    10% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    90% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
 }
 
 .divider {

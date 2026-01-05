@@ -1,0 +1,7 @@
+directories:
+  data: "/Users/michaelcheng/Desktop/IA Companion V2/arduino/data"
+  downloads: "/Users/michaelcheng/Desktop/IA Companion V2/arduino/downloads"
+  user: "/Users/michaelcheng/Desktop/IA Companion V2/arduino/user"
+
+board_manager:
+  additional_urls: []

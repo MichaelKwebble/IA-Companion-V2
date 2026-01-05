@@ -57,6 +57,17 @@
     background: var(--color-bg-hover);
 }
 
+.explorer-item.active {
+    background: #E5E5E5;
+    /* Light grey for selected file */
+}
+
+.explorer-item.active .file-name,
+.explorer-item.active .file-icon-type {
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+
 .file-icon {
     width: 12px;
     height: 12px;

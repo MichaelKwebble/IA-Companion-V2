@@ -10,6 +10,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import multer from 'multer';
+import AdmZip from 'adm-zip';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +21,81 @@ const app = express();
 const PORT = 3001;
 const APP_ROOT = path.join(__dirname, '..');
 const PROJECTS_FILE = path.join(APP_ROOT, 'projects.json');
+const ARDUINO_ROOT = path.join(APP_ROOT, 'arduino');
+const ARDUINO_CONFIG_DIR = path.join(ARDUINO_ROOT, 'config');
+const ARDUINO_DATA_DIR = path.join(ARDUINO_ROOT, 'data');
+const ARDUINO_DOWNLOADS_DIR = path.join(ARDUINO_ROOT, 'downloads');
+const ARDUINO_USER_DIR = path.join(ARDUINO_ROOT, 'user');
+const ARDUINO_LIBS_DIR = path.join(ARDUINO_USER_DIR, 'libraries');
+const ARDUINO_SKETCHES_DIR = path.join(ARDUINO_USER_DIR, 'sketches');
+const ARDUINO_YAML_PATH = path.join(ARDUINO_CONFIG_DIR, 'arduino-cli.yaml');
+
+// Multer setup for ZIP uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, ARDUINO_DOWNLOADS_DIR);
+    },
+    filename: (req, file, cb) => {
+        cb(null, file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
+// Ensure Arduino directories exist
+async function initArduinoDirs() {
+    const dirs = [
+        ARDUINO_ROOT,
+        ARDUINO_CONFIG_DIR,
+        ARDUINO_DATA_DIR,
+        ARDUINO_DOWNLOADS_DIR,
+        ARDUINO_USER_DIR,
+        ARDUINO_LIBS_DIR,
+        ARDUINO_SKETCHES_DIR
+    ];
+
+    for (const dir of dirs) {
+        await fs.mkdir(dir, { recursive: true });
+    }
+
+    // Generate arduino-cli.yaml if it doesn't exist
+    try {
+        await fs.access(ARDUINO_YAML_PATH);
+    } catch (e) {
+        const yamlContent = `
+directories:
+  data: "${ARDUINO_DATA_DIR}"
+  downloads: "${ARDUINO_DOWNLOADS_DIR}"
+  user: "${ARDUINO_USER_DIR}"
+
+board_manager:
+  additional_urls: []
+`;
+        await fs.writeFile(ARDUINO_YAML_PATH, yamlContent.trim(), 'utf-8');
+        console.log(`[Arduino] Created config at ${ARDUINO_YAML_PATH}`);
+    }
+}
+
+// Helper to run arduino-cli with config
+async function runArduinoCLI(args, options = {}) {
+    const defaultArgs = ['--config-file', ARDUINO_YAML_PATH];
+    const allArgs = [...defaultArgs, ...args];
+
+    console.log(`[Arduino CLI] Running: arduino-cli ${allArgs.join(' ')}`);
+
+    if (options.spawn) {
+        return spawn('arduino-cli', allArgs, options);
+    }
+
+    // Increase maxBuffer to 100MB for large search results (e.g. lib search)
+    return execAsync(`arduino-cli ${allArgs.map(a => `"${a}"`).join(' ')}`, {
+        ...options,
+        maxBuffer: 100 * 1024 * 1024
+    });
+}
+
+// Initialize on startup
+initArduinoDirs().catch(err => console.error('[Arduino] Init failed:', err));
+
 
 // Helper to load projects
 async function loadProjects() {
@@ -644,8 +721,270 @@ app.post('/api/serial/connect', async (req, res) => {
     }
 });
 
+// --- Arduino Boards Manager Endpoints ---
+
+app.post('/api/arduino/boards/update-index', async (req, res) => {
+    try {
+        await runArduinoCLI(['core', 'update-index']);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/boards/list', async (req, res) => {
+    try {
+        const { stdout } = await runArduinoCLI(['core', 'list', '--format', 'json']);
+        res.json({ success: true, data: JSON.parse(stdout) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/boards/search', async (req, res) => {
+    try {
+        const { query } = req.query;
+        const args = ['core', 'search'];
+        if (query) args.push(query);
+        args.push('--format', 'json');
+        const { stdout } = await runArduinoCLI(args);
+        res.json({ success: true, data: JSON.parse(stdout) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/boards/install', async (req, res) => {
+    const { fqbn } = req.body;
+    if (!fqbn) return res.status(400).json({ success: false, error: 'FQBN is required' });
+
+    try {
+        // Use spawn to stream output to clients
+        const child = await runArduinoCLI(['core', 'install', fqbn], { spawn: true });
+
+        child.stdout.on('data', (data) => {
+            broadcastToClients({ type: 'arduino-log', data: data.toString() });
+        });
+
+        child.stderr.on('data', (data) => {
+            broadcastToClients({ type: 'arduino-log', data: data.toString(), isError: true });
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                broadcastToClients({ type: 'arduino-status', status: 'success', message: `Installed ${fqbn}` });
+            } else {
+                broadcastToClients({ type: 'arduino-status', status: 'error', message: `Failed to install ${fqbn}` });
+            }
+        });
+
+        res.json({ success: true, message: 'Installation started' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/boards/uninstall', async (req, res) => {
+    const { fqbn } = req.body;
+    try {
+        await runArduinoCLI(['core', 'uninstall', fqbn]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/boards/config/urls', async (req, res) => {
+    const { urls } = req.body; // Array of strings
+    try {
+        const urlsStr = urls.join(',');
+        await runArduinoCLI(['config', 'set', 'board_manager.additional_urls', urlsStr]);
+        await runArduinoCLI(['core', 'update-index']);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- Arduino Library Manager Endpoints ---
+
+app.post('/api/arduino/libraries/update-index', async (req, res) => {
+    try {
+        await runArduinoCLI(['lib', 'update-index']);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/libraries/list', async (req, res) => {
+    try {
+        const { stdout } = await runArduinoCLI(['lib', 'list', '--format', 'json']);
+        res.json({ success: true, data: JSON.parse(stdout) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/libraries/search', async (req, res) => {
+    try {
+        const { query } = req.query;
+        const args = ['lib', 'search'];
+        if (query) args.push(query);
+        args.push('--format', 'json');
+
+        const { stdout } = await runArduinoCLI(args);
+        let data = JSON.parse(stdout);
+
+        // If no query, limit to first 100 results for performance
+        if (!query && data.libraries && data.libraries.length > 100) {
+            data.libraries = data.libraries.slice(0, 100);
+            data.limited = true;
+        }
+
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error(`[Arduino] Library search failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/libraries/install', async (req, res) => {
+    const { name, version } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'Library name is required' });
+
+    try {
+        const libSpec = version ? `${name}@${version}` : name;
+        const child = await runArduinoCLI(['lib', 'install', libSpec], { spawn: true });
+
+        child.stdout.on('data', (data) => {
+            broadcastToClients({ type: 'arduino-log', data: data.toString() });
+        });
+
+        child.stderr.on('data', (data) => {
+            broadcastToClients({ type: 'arduino-log', data: data.toString(), isError: true });
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                broadcastToClients({ type: 'arduino-status', status: 'success', message: `Installed ${name}` });
+            } else {
+                broadcastToClients({ type: 'arduino-status', status: 'error', message: `Failed to install ${name}` });
+            }
+        });
+
+        res.json({ success: true, message: 'Installation started' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/libraries/uninstall', async (req, res) => {
+    const { name } = req.body;
+    try {
+        await runArduinoCLI(['lib', 'uninstall', name]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/libraries/upgrade-all', async (req, res) => {
+    try {
+        const child = await runArduinoCLI(['lib', 'upgrade', '--all'], { spawn: true });
+
+        child.stdout.on('data', (data) => {
+            broadcastToClients({ type: 'arduino-log', data: data.toString() });
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                broadcastToClients({ type: 'arduino-status', status: 'success', message: 'All libraries upgraded' });
+            } else {
+                broadcastToClients({ type: 'arduino-status', status: 'error', message: 'Failed to upgrade libraries' });
+            }
+        });
+
+        res.json({ success: true, message: 'Upgrade started' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/libraries/install-zip', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+
+    const zipPath = req.file.path;
+    try {
+        // Try arduino-cli first
+        try {
+            console.log(`[Arduino] Attempting ZIP install via CLI: ${zipPath}`);
+            await runArduinoCLI(['lib', 'install', '--zip-path', zipPath]);
+            res.json({ success: true, message: 'Library installed from ZIP via CLI' });
+            return;
+        } catch (cliError) {
+            console.warn(`[Arduino] CLI ZIP install failed, falling back to manual: ${cliError.message}`);
+        }
+
+        // Manual fallback
+        const zip = new AdmZip(zipPath);
+        const zipEntries = zip.getEntries();
+
+        // Find the library folder name (usually the first folder in ZIP)
+        let libFolderName = path.basename(req.file.originalname, '.zip');
+        if (zipEntries.length > 0) {
+            const firstEntry = zipEntries[0].entryName.split('/')[0];
+            if (firstEntry) libFolderName = firstEntry;
+        }
+
+        const targetPath = path.join(ARDUINO_LIBS_DIR, libFolderName);
+
+        // Handle collisions
+        let finalPath = targetPath;
+        try {
+            await fs.access(targetPath);
+            const suffix = Date.now();
+            finalPath = `${targetPath}_${suffix}`;
+            console.log(`[Arduino] Collision detected, installing to ${finalPath}`);
+        } catch (e) {
+            // Path doesn't exist, good to go
+        }
+
+        zip.extractAllTo(ARDUINO_LIBS_DIR, true);
+
+        // Validate
+        const extractedPath = path.join(ARDUINO_LIBS_DIR, libFolderName);
+        const entries = await fs.readdir(extractedPath);
+        const hasProps = entries.includes('library.properties');
+        const hasHeaders = entries.some(e => e.endsWith('.h') || e.endsWith('.hpp'));
+
+        if (!hasProps && !hasHeaders) {
+            throw new Error('Invalid library structure: no library.properties or headers found at root');
+        }
+
+        res.json({ success: true, message: `Library installed manually to ${libFolderName}` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        await fs.unlink(zipPath).catch(() => { });
+    }
+});
+
+app.post('/api/arduino/cache/clear', async (req, res) => {
+    try {
+        const files = await fs.readdir(ARDUINO_DOWNLOADS_DIR);
+        for (const file of files) {
+            await fs.unlink(path.join(ARDUINO_DOWNLOADS_DIR, file));
+        }
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // API endpoint to disconnect
 app.post('/api/serial/disconnect', async (req, res) => {
+
     try {
         await portManager.release('MANUAL');
         res.json({ success: true });
