@@ -46,13 +46,17 @@ const upload = multer({ storage: storage });
 
 // Helper to sanitize paths for YAML (Windows backslash fix)
 function sanitizePath(p) {
-    if (process.platform === 'win32') {
-        // On Windows, use backslashes and escape them for YAML double-quoted strings
-        return p.replace(/\//g, '\\').replace(/\\/g, '\\\\');
-    }
-    // On Mac/Unix, forward slashes are correct
+    // Forward slashes are safe and preferred in arduino-cli.yaml even on Windows
     return p.replace(/\\/g, '/');
 }
+
+// Common environment for all arduino-cli calls
+const ARDUINO_ENV = {
+    ...process.env,
+    ARDUINO_DATA_DIR: ARDUINO_DATA_DIR,
+    ARDUINO_USER_DIR: ARDUINO_USER_DIR,
+    ARDUINO_DOWNLOADS_DIR: ARDUINO_DOWNLOADS_DIR
+};
 
 // Ensure Arduino directories exist
 async function initArduinoDirs() {
@@ -98,13 +102,14 @@ async function runArduinoCLI(args, options = {}) {
     console.log(`[Arduino CLI] Running: arduino-cli ${allArgs.join(' ')}`);
 
     if (options.spawn) {
-        return spawn('arduino-cli', allArgs, options);
+        return spawn('arduino-cli', allArgs, { ...options, env: ARDUINO_ENV });
     }
 
     // Increase maxBuffer to 100MB for large search results (e.g. lib search)
     return execAsync(`arduino-cli ${allArgs.map(a => `"${a}"`).join(' ')}`, {
         ...options,
-        maxBuffer: 100 * 1024 * 1024
+        maxBuffer: 100 * 1024 * 1024,
+        env: ARDUINO_ENV
     });
 }
 
@@ -1278,7 +1283,8 @@ app.post('/api/flash', async (req, res) => {
             console.log(`[Flash] Running: ${fullCommand}`);
             const child = spawn(fullCommand, {
                 cwd: options.cwd || process.cwd(),
-                shell: true
+                shell: true,
+                env: ARDUINO_ENV
             });
             let lastProgress = startProgress;
 
