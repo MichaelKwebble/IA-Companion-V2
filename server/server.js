@@ -46,7 +46,12 @@ const upload = multer({ storage: storage });
 
 // Helper to sanitize paths for YAML (Windows backslash fix)
 function sanitizePath(p) {
-    return p.split(path.sep).join('/');
+    if (process.platform === 'win32') {
+        // On Windows, use backslashes and escape them for YAML double-quoted strings
+        return p.replace(/\//g, '\\').replace(/\\/g, '\\\\');
+    }
+    // On Mac/Unix, forward slashes are correct
+    return p.replace(/\\/g, '/');
 }
 
 // Ensure Arduino directories exist
