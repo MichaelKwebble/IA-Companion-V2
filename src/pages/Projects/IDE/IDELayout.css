@@ -5,6 +5,47 @@
     background-color: var(--color-bg-app);
 }
 
+.preview-banner {
+    background: #fff7ed;
+    border-bottom: 1px solid #fed7aa;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.preview-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #9a3412;
+    font-size: 13px;
+}
+
+.preview-info strong {
+    font-weight: 600;
+}
+
+.clone-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #ea580c;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.clone-btn:hover {
+    background: #c2410c;
+}
+
 .ide-toolbar {
     height: 48px;
     background-color: var(--color-bg-panel);
@@ -139,10 +180,23 @@
     display: flex;
     border-bottom: 1px solid var(--color-border);
     background-color: var(--color-bg-app);
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+}
+
+.left-panel-tabs::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera */
 }
 
 .panel-tab {
     flex: 1;
+    flex-shrink: 0;
+    min-width: 80px;
     height: 36px;
     display: flex;
     align-items: center;

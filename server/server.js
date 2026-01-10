@@ -68,7 +68,9 @@ directories:
   user: "${ARDUINO_USER_DIR}"
 
 board_manager:
-  additional_urls: []
+  additional_urls: [
+    "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
+  ]
 `;
         await fs.writeFile(ARDUINO_YAML_PATH, yamlContent.trim(), 'utf-8');
         console.log(`[Arduino] Created config at ${ARDUINO_YAML_PATH}`);
@@ -115,6 +117,19 @@ async function loadProjects() {
 async function saveProjects(projects) {
     await fs.writeFile(PROJECTS_FILE, JSON.stringify(projects, null, 2), 'utf-8');
 }
+
+// Helper to delete project directory
+async function deleteProjectDirectory(projectPath) {
+    try {
+        await fs.rm(projectPath, { recursive: true, force: true });
+        console.log(`[Server] Deleted directory: ${projectPath}`);
+        return true;
+    } catch (error) {
+        console.error(`[Server] Failed to delete directory ${projectPath}:`, error);
+        return false;
+    }
+}
+
 let currentProjectRoot = APP_ROOT;
 
 // Create HTTP server
@@ -699,6 +714,36 @@ app.get('/api/devices', async (req, res) => {
     }
 });
 
+
+// API endpoint to delete a project
+app.delete('/api/projects/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const projects = await loadProjects();
+        const projectIndex = projects.findIndex(p => p.id === id);
+
+        if (projectIndex === -1) {
+            return res.status(404).json({ success: false, error: 'Project not found' });
+        }
+
+        const project = projects[projectIndex];
+
+        // Remove from list
+        projects.splice(projectIndex, 1);
+        await saveProjects(projects);
+
+        // Delete from disk if it has a path
+        if (project.path) {
+            await deleteProjectDirectory(project.path);
+        }
+
+        res.json({ success: true, message: 'Project deleted successfully' });
+    } catch (error) {
+        console.error('[API Error]', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // API endpoint to connect to a device
 app.post('/api/serial/connect', async (req, res) => {
     try {
@@ -772,9 +817,9 @@ app.post('/api/arduino/boards/install', async (req, res) => {
 
         child.on('close', (code) => {
             if (code === 0) {
-                broadcastToClients({ type: 'arduino-status', status: 'success', message: `Installed ${fqbn}` });
+                broadcastToClients({ type: 'arduino-status', status: 'success', id: fqbn, message: `Installed ${fqbn}` });
             } else {
-                broadcastToClients({ type: 'arduino-status', status: 'error', message: `Failed to install ${fqbn}` });
+                broadcastToClients({ type: 'arduino-status', status: 'error', id: fqbn, message: `Failed to install ${fqbn}` });
             }
         });
 
@@ -787,9 +832,12 @@ app.post('/api/arduino/boards/install', async (req, res) => {
 app.post('/api/arduino/boards/uninstall', async (req, res) => {
     const { fqbn } = req.body;
     try {
+        broadcastToClients({ type: 'arduino-status', status: 'starting', id: fqbn, message: `Uninstalling ${fqbn}...` });
         await runArduinoCLI(['core', 'uninstall', fqbn]);
+        broadcastToClients({ type: 'arduino-status', status: 'success', id: fqbn, message: `Uninstalled ${fqbn}` });
         res.json({ success: true });
     } catch (error) {
+        broadcastToClients({ type: 'arduino-status', status: 'error', id: fqbn, message: `Failed to uninstall ${fqbn}: ${error.message}` });
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -819,7 +867,10 @@ app.post('/api/arduino/libraries/update-index', async (req, res) => {
 
 app.get('/api/arduino/libraries/list', async (req, res) => {
     try {
-        const { stdout } = await runArduinoCLI(['lib', 'list', '--format', 'json']);
+        const { updatable } = req.query;
+        const args = ['lib', 'list', '--format', 'json'];
+        if (updatable === 'true') args.push('--updatable');
+        const { stdout } = await runArduinoCLI(args);
         res.json({ success: true, data: JSON.parse(stdout) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -867,9 +918,9 @@ app.post('/api/arduino/libraries/install', async (req, res) => {
 
         child.on('close', (code) => {
             if (code === 0) {
-                broadcastToClients({ type: 'arduino-status', status: 'success', message: `Installed ${name}` });
+                broadcastToClients({ type: 'arduino-status', status: 'success', id: name, message: `Installed ${name}` });
             } else {
-                broadcastToClients({ type: 'arduino-status', status: 'error', message: `Failed to install ${name}` });
+                broadcastToClients({ type: 'arduino-status', status: 'error', id: name, message: `Failed to install ${name}` });
             }
         });
 
@@ -882,9 +933,27 @@ app.post('/api/arduino/libraries/install', async (req, res) => {
 app.post('/api/arduino/libraries/uninstall', async (req, res) => {
     const { name } = req.body;
     try {
+        broadcastToClients({ type: 'arduino-status', status: 'starting', id: name, message: `Uninstalling ${name}...` });
         await runArduinoCLI(['lib', 'uninstall', name]);
+
+        // Automatically clean up cached ZIP for this library
+        try {
+            const libCacheDir = path.join(ARDUINO_DOWNLOADS_DIR, 'libraries');
+            const files = await fs.readdir(libCacheDir);
+            for (const file of files) {
+                if (file.startsWith(`${name}-`) && file.endsWith('.zip')) {
+                    await fs.unlink(path.join(libCacheDir, file));
+                    console.log(`[Arduino] Automatically removed cached ZIP: ${file}`);
+                }
+            }
+        } catch (cacheErr) {
+            console.warn(`[Arduino] Failed to clean up cache for ${name}: ${cacheErr.message}`);
+        }
+
+        broadcastToClients({ type: 'arduino-status', status: 'success', id: name, message: `Uninstalled ${name}` });
         res.json({ success: true });
     } catch (error) {
+        broadcastToClients({ type: 'arduino-status', status: 'error', id: name, message: `Failed to uninstall ${name}: ${error.message}` });
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -906,6 +975,121 @@ app.post('/api/arduino/libraries/upgrade-all', async (req, res) => {
         });
 
         res.json({ success: true, message: 'Upgrade started' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/libraries/examples', async (req, res) => {
+    try {
+        const libs = await fs.readdir(ARDUINO_LIBS_DIR, { withFileTypes: true });
+        const result = [];
+
+        for (const lib of libs) {
+            if (lib.isDirectory()) {
+                const examplesPath = path.join(ARDUINO_LIBS_DIR, lib.name, 'examples');
+                try {
+                    const examples = await fs.readdir(examplesPath, { withFileTypes: true });
+                    const exampleFolders = examples
+                        .filter(e => e.isDirectory())
+                        .map(e => e.name);
+
+                    if (exampleFolders.length > 0) {
+                        result.push({
+                            library: lib.name,
+                            examples: exampleFolders
+                        });
+                    }
+                } catch (e) {
+                    // No examples folder or not readable
+                }
+            }
+        }
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/arduino/libraries/examples/open', async (req, res) => {
+    const { library, example, mode } = req.body; // mode: 'preview' | 'clone'
+    if (!library || !example) return res.status(400).json({ success: false, error: 'Library and example names are required' });
+
+    const sourcePath = path.join(ARDUINO_LIBS_DIR, library, 'examples', example);
+
+    try {
+        await fs.access(sourcePath);
+
+        if (mode === 'preview') {
+            // Find the .ino file (usually matches folder name)
+            const files = await fs.readdir(sourcePath);
+            const mainFile = files.find(f => f.endsWith('.ino')) || `${example}.ino`;
+
+            res.json({
+                success: true,
+                project: {
+                    id: `preview-${library}-${example}`,
+                    name: `${library}: ${example}`,
+                    path: sourcePath,
+                    type: 'code',
+                    mainFile,
+                    readOnly: true
+                }
+            });
+        } else {
+            // Clone mode
+            const projects = await loadProjects();
+            let projectName = `${library}_${example}`;
+            let destPath = path.join(ARDUINO_SKETCHES_DIR, projectName);
+
+            // Handle collisions
+            let counter = 1;
+            while (true) {
+                try {
+                    await fs.access(destPath);
+                    projectName = `${library}_${example}_${counter}`;
+                    destPath = path.join(ARDUINO_SKETCHES_DIR, projectName);
+                    counter++;
+                } catch (e) {
+                    break;
+                }
+            }
+
+            // Copy folder
+            await fs.mkdir(destPath, { recursive: true });
+            const copyDir = async (src, dest) => {
+                const entries = await fs.readdir(src, { withFileTypes: true });
+                for (const entry of entries) {
+                    const srcPath = path.join(src, entry.name);
+                    const destPathEntry = path.join(dest, entry.name);
+                    if (entry.isDirectory()) {
+                        await fs.mkdir(destPathEntry, { recursive: true });
+                        await copyDir(srcPath, destPathEntry);
+                    } else {
+                        await fs.copyFile(srcPath, destPathEntry);
+                    }
+                }
+            };
+            await copyDir(sourcePath, destPath);
+
+            // Register project
+            const files = await fs.readdir(destPath);
+            const mainFile = files.find(f => f.endsWith('.ino')) || `${example}.ino`;
+
+            const newProject = {
+                id: Math.random().toString(36).substring(2, 11),
+                name: projectName,
+                path: destPath,
+                type: 'code',
+                mainFile,
+                lastModified: 'Just now'
+            };
+
+            projects.push(newProject);
+            await saveProjects(projects);
+
+            res.json({ success: true, project: newProject });
+        }
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -972,11 +1156,52 @@ app.post('/api/arduino/libraries/install-zip', upload.single('file'), async (req
 
 app.post('/api/arduino/cache/clear', async (req, res) => {
     try {
-        const files = await fs.readdir(ARDUINO_DOWNLOADS_DIR);
-        for (const file of files) {
-            await fs.unlink(path.join(ARDUINO_DOWNLOADS_DIR, file));
+        // Selective clearing: only remove ZIPs for libraries that are NOT installed
+        const installedLibs = await fs.readdir(ARDUINO_LIBS_DIR).catch(() => []);
+        const libCacheDir = path.join(ARDUINO_DOWNLOADS_DIR, 'libraries');
+
+        let removedCount = 0;
+        try {
+            const files = await fs.readdir(libCacheDir);
+            for (const file of files) {
+                const filePath = path.join(libCacheDir, file);
+                const stats = await fs.stat(filePath);
+
+                if (stats.isDirectory()) {
+                    // If it's a directory in the cache, we can probably remove it if it's not an installed lib name
+                    if (!installedLibs.includes(file)) {
+                        await fs.rm(filePath, { recursive: true, force: true });
+                        removedCount++;
+                    }
+                } else if (file.endsWith('.zip')) {
+                    // For ZIPs, check if the library name (part before the first hyphen) is installed
+                    const libName = file.split('-')[0];
+                    if (!installedLibs.includes(libName)) {
+                        await fs.unlink(filePath);
+                        removedCount++;
+                    }
+                }
+            }
+        } catch (e) {
+            // Directory might not exist
         }
-        res.json({ success: true });
+
+        // Also clear the root downloads dir (usually temporary uploads)
+        const rootFiles = await fs.readdir(ARDUINO_DOWNLOADS_DIR);
+        for (const file of rootFiles) {
+            const filePath = path.join(ARDUINO_DOWNLOADS_DIR, file);
+            if (file === 'libraries') continue; // Skip the libraries subfolder we just processed
+
+            const stats = await fs.stat(filePath);
+            if (stats.isDirectory()) {
+                await fs.rm(filePath, { recursive: true, force: true });
+            } else {
+                await fs.unlink(filePath);
+            }
+            removedCount++;
+        }
+
+        res.json({ success: true, removedCount });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -995,7 +1220,8 @@ app.post('/api/serial/disconnect', async (req, res) => {
 
 // API endpoint to flash code
 app.post('/api/flash', async (req, res) => {
-    const { code, usbSerial, projectRoot, currentFilePath } = req.body;
+    const { code, usbSerial, projectRoot, currentFilePath, isReadOnly } = req.body;
+    console.log(`[Flash] Request: usbSerial=${usbSerial}, projectRoot=${projectRoot}, isReadOnly=${isReadOnly}`);
     if (!code || !usbSerial) return res.status(400).json({ success: false, error: 'Missing args' });
 
     // 1. Acquire FLASHING lock (this will preempt MANUAL connection)
@@ -1015,37 +1241,59 @@ app.post('/api/flash', async (req, res) => {
         const { startProgress = 0, endProgress = 100, stage = 'Processing' } = options;
 
         return new Promise((resolve, reject) => {
-            console.log(`[Flash] Running: ${command} ${args.join(' ')}`);
-            const child = spawn(command, args, { cwd: options.cwd || process.cwd() });
-            let lastProgress = -1;
+            const fullCommand = `${command} ${args.map(a => `"${a}"`).join(' ')}`;
+            console.log(`[Flash] Running: ${fullCommand}`);
+            const child = spawn(fullCommand, {
+                cwd: options.cwd || process.cwd(),
+                shell: true
+            });
+            let lastProgress = startProgress;
+
+            // Broadcast initial progress for this stage
+            broadcastToClients({
+                type: 'flash-status',
+                status: options.status || 'processing',
+                message: options.message || stage,
+                progress: startProgress
+            });
 
             child.stdout.on('data', (data) => {
                 const output = data.toString();
-                // console.log(`[Flash] ${stage} stdout: ${output}`); // Debug
 
-                // Parse esptool progress: "(8 %)"
-                const match = output.match(/\((\d+)\s*%\)/);
-                if (match) {
-                    const percent = parseInt(match[1]);
-                    const mappedProgress = Math.round(startProgress + (percent / 100) * (endProgress - startProgress));
+                // Also broadcast as raw arduino log
+                broadcastToClients({
+                    type: 'arduino-log',
+                    data: output,
+                    isError: false
+                });
 
-                    if (mappedProgress !== lastProgress) {
-                        lastProgress = mappedProgress;
-                        broadcastToClients({
-                            type: 'flash-status',
-                            status: options.status || 'processing',
-                            message: options.message || stage,
-                            progress: mappedProgress
-                        });
+                // Split by newline or carriage return to handle progress updates (esptool uses \r)
+                const lines = output.split(/[\r\n]+/);
+                for (const line of lines) {
+                    // Parse esptool progress: "(8 %)"
+                    const match = line.match(/\((\d+)\s*%\)/);
+                    if (match) {
+                        const percent = parseInt(match[1]);
+                        const mappedProgress = Math.round(startProgress + (percent / 100) * (endProgress - startProgress));
+
+                        if (mappedProgress !== lastProgress) {
+                            lastProgress = mappedProgress;
+                            broadcastToClients({
+                                type: 'flash-status',
+                                status: options.status || 'processing',
+                                message: options.message || stage,
+                                progress: mappedProgress
+                            });
+                        }
                     }
-                }
 
-                // Parse compilation progress (arduino-cli compile --verbose)
-                if (stage === 'Compiling') {
-                    if (output.includes('Compiling sketch...')) setProgress(15);
-                    if (output.includes('Compiling libraries...')) setProgress(25);
-                    if (output.includes('Compiling core...')) setProgress(35);
-                    if (output.includes('Linking everything together...')) setProgress(38);
+                    // Parse compilation progress (arduino-cli compile --verbose)
+                    if (stage === 'Compiling') {
+                        if (line.includes('Compiling sketch...')) setProgress(15);
+                        if (line.includes('Compiling libraries...')) setProgress(25);
+                        if (line.includes('Compiling core...')) setProgress(35);
+                        if (line.includes('Linking everything together...')) setProgress(38);
+                    }
                 }
             });
 
@@ -1063,7 +1311,14 @@ app.post('/api/flash', async (req, res) => {
 
             child.stderr.on('data', (data) => {
                 const output = data.toString();
-                // console.log(`[Flash] ${stage} stderr: ${output}`);
+                console.error(`[Flash] ${stage} stderr: ${output}`);
+
+                // Broadcast as raw arduino log instead of overwriting flash-status message
+                broadcastToClients({
+                    type: 'arduino-log',
+                    data: output,
+                    isError: true
+                });
             });
 
             child.on('close', (code) => {
@@ -1116,18 +1371,31 @@ app.post('/api/flash', async (req, res) => {
         // 3. Compile
         const fqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default,UploadSpeed=115200';
         const libPath = path.join(APP_ROOT, 'IA_firmware', 'arduino-libraries');
-        const compileCmd = `arduino-cli compile --fqbn ${fqbn} --libraries "${libPath}" "${tempDir}"`;
+
+        const compileArgs = [
+            'compile',
+            '--clean',
+            '--config-file', ARDUINO_YAML_PATH,
+            '--fqbn', fqbn,
+            '--verbose'
+        ];
+
+        // Only include product firmware libraries if not in read-only (example) mode
+        if (!isReadOnly) {
+            compileArgs.push('--libraries', libPath);
+        }
+
+        compileArgs.push(tempDir);
 
         broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling...', progress: 10 });
 
-        // Compile using spawn to capture output if needed, but for now we'll just step it
-        await runCommandWithProgress('arduino-cli', [
-            'compile',
-            '--fqbn', fqbn,
-            '--libraries', libPath,
-            '--verbose',
-            tempDir
-        ], { startProgress: 10, endProgress: 40, stage: 'Compiling', status: 'compiling', message: 'Compiling...' });
+        await runCommandWithProgress('arduino-cli', compileArgs, {
+            startProgress: 10,
+            endProgress: 40,
+            stage: 'Compiling',
+            status: 'compiling',
+            message: 'Compiling...'
+        });
 
         broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compilation successful', progress: 40 });
 
@@ -1151,6 +1419,7 @@ app.post('/api/flash', async (req, res) => {
 
                 await runCommandWithProgress('arduino-cli', [
                     'upload',
+                    '--config-file', ARDUINO_YAML_PATH,
                     '-p', normalizePortPath(portPath),
                     '--fqbn', fqbn,
                     tempDir
@@ -1178,10 +1447,14 @@ app.post('/api/flash', async (req, res) => {
         }
 
         broadcastToClients({ type: 'flash-status', status: 'success', message: 'Flash successful!', progress: 100 });
+
+        // Give the UI a moment to show 100% before closing
+        await sleep(1500);
+
         res.json({ success: true, message: 'Flash successful' });
 
     } catch (error) {
-        console.error('[Flash] Error:', error.message);
+        console.error('[Flash] Error:', error);
         broadcastToClients({ type: 'flash-status', status: 'error', message: error.message });
         res.status(500).json({ success: false, error: error.message });
     } finally {

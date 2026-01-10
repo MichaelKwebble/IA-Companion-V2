@@ -12,6 +12,8 @@ interface SerialMessage {
     progress?: number;
     isError?: boolean;
     timestamp?: string;
+    id?: string;
+    arduinoStatus?: { status: 'success' | 'error' | 'starting'; id: string; message: string; timestamp: number };
 }
 
 // Global WebSocket instance - singleton pattern using window to survive HMR
@@ -84,6 +86,7 @@ export function useSerialMonitor() {
     const [flashMessage, setFlashMessage] = useState<string>('');
     const [sensorConfig, setSensorConfig] = useState<SensorPort[]>([]);
     const [arduinoLogs, setArduinoLogs] = useState<{ text: string; isError?: boolean }[]>([]);
+    const [arduinoStatus, setArduinoStatus] = useState<{ status: 'success' | 'error' | 'starting'; id: string; message: string; timestamp: number } | null>(null);
     const [connectedDevice, setConnectedDevice] = useState<ESP32Device | null>(null);
     const bufferRef = useRef<string>('');
 
@@ -312,6 +315,12 @@ export function useSerialMonitor() {
 
                 case 'arduino-status':
                     setArduinoLogs(prev => [...prev, { text: `[Status] ${message.status}: ${message.message || ''}`, isError: message.status === 'error' }]);
+                    setArduinoStatus({
+                        status: message.status as 'success' | 'error' | 'starting',
+                        id: message.id || '',
+                        message: message.message || '',
+                        timestamp: Date.now()
+                    });
                     break;
             }
         };
@@ -341,6 +350,7 @@ export function useSerialMonitor() {
         disconnect,
         sendCommand,
         runTerminalCommand,
-        clearLog
+        clearLog,
+        arduinoStatus
     };
 }

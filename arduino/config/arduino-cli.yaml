@@ -4,4 +4,6 @@ directories:
   user: "/Users/michaelcheng/Desktop/IA Companion V2/arduino/user"
 
 board_manager:
-  additional_urls: []
+  additional_urls: [
+    "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
+  ]

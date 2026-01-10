@@ -22,3 +22,23 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ============================================
+# Arduino directories - exclude most content
+# ============================================
+
+# Exclude ALL board managers and libraries (including ESP32)
+# Developers will download the ESP32 board manager through the app's Boards Manager
+arduino/data/packages/*
+arduino/user/libraries/*
+arduino/downloads/*
+arduino/data/tmp/*
+
+# Keep Arduino index files (needed for package/library updates)
+!arduino/data/*.json
+!arduino/data/*.json.sig
+!arduino/data/*.yaml
+
+# Keep config directory structure
+!arduino/config/
+

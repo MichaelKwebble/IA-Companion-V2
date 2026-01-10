@@ -296,6 +296,18 @@
     background: #fecaca;
 }
 
+.arduino-installing-state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+}
+
 .arduino-loading-state,
 .arduino-empty-state {
     display: flex;
@@ -454,4 +466,84 @@
 .arduino-btn-danger-outline:hover {
     background: rgba(239, 68, 68, 0.1);
     border-color: #ef4444;
+}
+
+@keyframes arduino-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.arduino-btn-examples {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.arduino-btn-examples:hover {
+    background: #e5e7eb;
+    border-color: #d1d5db;
+}
+
+.arduino-item-examples-list {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.arduino-example-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    gap: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #4b5563;
+    transition: all 0.2s;
+}
+
+.arduino-example-row:hover {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.arduino-example-row svg {
+    color: #9ca3af;
+}
+
+.arduino-example-row:hover svg {
+    color: #2563eb;
+}
+
+.arduino-example-row .arrow {
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.arduino-example-row:hover .arrow {
+    opacity: 1;
+}
+
+.arduino-animate-spin {
+    animation: arduino-spin 1s linear infinite;
+    transform-origin: center;
+    display: inline-block;
 }

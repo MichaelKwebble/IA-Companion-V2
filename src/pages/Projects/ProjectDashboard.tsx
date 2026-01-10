@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Code, PenTool } from 'lucide-react';
+import { Plus, Code, PenTool, Trash2 } from 'lucide-react';
 import './ProjectDashboard.css';
 
 interface Project {
@@ -49,6 +49,28 @@ const ProjectDashboard: React.FC = () => {
         navigate(`/projects/${project.id}?type=code&name=${encodeURIComponent(project.name)}`);
     };
 
+    const handleDeleteProject = async (e: React.MouseEvent, project: Project) => {
+        e.stopPropagation(); // Prevent card click
+        if (!confirm(`Are you sure you want to delete project "${project.name}"? This will permanently delete the files from disk.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3001/api/projects/${project.id}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            if (data.success) {
+                setProjects(prev => prev.filter(p => p.id !== project.id));
+            } else {
+                alert('Failed to delete project: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Failed to delete project:', error);
+            alert('Failed to delete project');
+        }
+    };
+
     return (
         <div className="project-dashboard p-md">
             <NewProjectModal
@@ -78,6 +100,13 @@ const ProjectDashboard: React.FC = () => {
                             <h3>{project.name}</h3>
                             <span className="text-sm text-secondary">{project.type === 'code' ? 'Arduino Project' : 'UI Design'} • {project.lastModified}</span>
                         </div>
+                        <button
+                            className="delete-project-btn"
+                            onClick={(e) => handleDeleteProject(e, project)}
+                            title="Delete Project"
+                        >
+                            <Trash2 size={18} />
+                        </button>
                     </div>
                 ))}
             </div>

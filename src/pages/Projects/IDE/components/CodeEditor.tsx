@@ -4,6 +4,7 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 interface CodeEditorProps {
     code: string;
     onChange: (newCode: string) => void;
+    readOnly?: boolean;
 }
 
 export interface CodeEditorHandle {
@@ -11,17 +12,17 @@ export interface CodeEditorHandle {
     redo: () => void;
 }
 
-const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange }, ref) => {
+const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange, readOnly = false }, ref) => {
     const editorRef = useRef<any>(null);
 
     useImperativeHandle(ref, () => ({
         undo: () => {
-            if (editorRef.current) {
+            if (editorRef.current && !readOnly) {
                 editorRef.current.trigger('keyboard', 'undo', null);
             }
         },
         redo: () => {
-            if (editorRef.current) {
+            if (editorRef.current && !readOnly) {
                 editorRef.current.trigger('keyboard', 'redo', null);
             }
         }
@@ -32,6 +33,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
     };
 
     const handleDrop = (e: React.DragEvent) => {
+        if (readOnly) return;
         e.preventDefault();
         const snippet = e.dataTransfer.getData('application/x-code-snippet');
 
@@ -91,6 +93,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
     };
 
     const handleDragOver = (e: React.DragEvent) => {
+        if (readOnly) return;
         e.preventDefault();
     };
 
@@ -109,7 +112,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
                 height="100%"
                 language="cpp"
                 value={code}
-                onChange={(value) => onChange(value || '')}
+                onChange={(value) => !readOnly && onChange(value || '')}
                 onMount={handleEditorDidMount}
                 theme="vs-light"
                 options={{
@@ -124,6 +127,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
                     tabSize: 2,
                     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
                     renderLineHighlight: 'none', // Clean look
+                    readOnly: readOnly,
                 }}
             />
         </div>

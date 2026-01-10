@@ -17,13 +17,14 @@ interface DeviceContextType {
     serialData: string[];
     terminalLogs: string[];
     arduinoLogs: { text: string; isError?: boolean }[];
+    arduinoStatus: { status: 'success' | 'error' | 'starting'; id: string; message: string; timestamp: number } | null;
     sensorConfig: any[];
     refresh: () => void;
     connectToDevice: (device: ESP32Device) => Promise<any>;
     disconnect: () => Promise<void>;
     sendCommand: (command: string) => void;
     runTerminalCommand: (command: string) => void;
-    flashCode: (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string) => Promise<any>;
+    flashCode: (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string, isReadOnly?: boolean) => Promise<any>;
     clearLog: () => void;
 }
 
@@ -40,6 +41,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         flashMessage,
         sensorConfig,
         arduinoLogs,
+        arduinoStatus,
         connectToDevice: serialConnect,
         disconnect,
         sendCommand,
@@ -71,14 +73,14 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [serialConnect]);
 
-    const flashCode = useCallback(async (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string) => {
+    const flashCode = useCallback(async (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string, isReadOnly?: boolean) => {
         setIsFlashing(true);
 
         try {
             const response = await fetch('http://localhost:3001/api/flash', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, usbSerial, projectRoot, currentFilePath })
+                body: JSON.stringify({ code, usbSerial, projectRoot, currentFilePath, isReadOnly })
             });
             const result = await response.json();
             return result;
@@ -126,6 +128,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         serialData,
         terminalLogs,
         arduinoLogs,
+        arduinoStatus,
         sensorConfig,
         refresh,
         connectToDevice,

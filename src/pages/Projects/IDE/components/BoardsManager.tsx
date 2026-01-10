@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RefreshCw, Settings, Trash2, Download, CheckCircle2, AlertCircle, ExternalLink, X } from 'lucide-react';
+import { Search, RefreshCw, Settings, Trash2, Download, CheckCircle2, AlertCircle, ExternalLink, X, Loader2 } from 'lucide-react';
+import { useDevice } from '../../../../context/DeviceContext';
 import './Managers.css';
 
 
@@ -22,6 +23,8 @@ const BoardsManager: React.FC = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [additionalUrls, setAdditionalUrls] = useState<string[]>([]);
     const [newUrl, setNewUrl] = useState('');
+    const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+    const { arduinoStatus } = useDevice();
 
     const fetchPlatforms = async (query = '') => {
         setIsLoading(true);
@@ -68,6 +71,22 @@ const BoardsManager: React.FC = () => {
         fetchPlatforms();
     }, []);
 
+    // Listen for status updates to refresh list and clear loading state
+    useEffect(() => {
+        if (arduinoStatus && (arduinoStatus.status === 'success' || arduinoStatus.status === 'error')) {
+            const baseId = arduinoStatus.id.split('@')[0];
+            setInstallingIds(prev => {
+                const next = new Set(prev);
+                next.delete(baseId);
+                next.delete(arduinoStatus.id);
+                return next;
+            });
+            if (arduinoStatus.status === 'success') {
+                fetchPlatforms(searchQuery);
+            }
+        }
+    }, [arduinoStatus]);
+
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
@@ -81,6 +100,7 @@ const BoardsManager: React.FC = () => {
     };
 
     const handleInstall = async (id: string, version?: string) => {
+        setInstallingIds(prev => new Set(prev).add(id));
         try {
             const response = await fetch('http://localhost:3001/api/arduino/boards/install', {
                 method: 'POST',
@@ -88,16 +108,26 @@ const BoardsManager: React.FC = () => {
                 body: JSON.stringify({ fqbn: version ? `${id}@${version}` : id })
             });
             const data = await response.json();
-            if (data.success) {
-                // Status will be updated via WebSocket logs
+            if (!data.success) {
+                setInstallingIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
             }
         } catch (error) {
             console.error('Install failed:', error);
+            setInstallingIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
         }
     };
 
     const handleUninstall = async (id: string) => {
         if (!confirm(`Are you sure you want to uninstall ${id}?`)) return;
+        setInstallingIds(prev => new Set(prev).add(id));
         try {
             const response = await fetch('http://localhost:3001/api/arduino/boards/uninstall', {
                 method: 'POST',
@@ -105,11 +135,20 @@ const BoardsManager: React.FC = () => {
                 body: JSON.stringify({ fqbn: id })
             });
             const data = await response.json();
-            if (data.success) {
-                fetchPlatforms(searchQuery);
+            if (!data.success) {
+                setInstallingIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
             }
         } catch (error) {
             console.error('Uninstall failed:', error);
+            setInstallingIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
         }
     };
 
@@ -142,7 +181,7 @@ const BoardsManager: React.FC = () => {
                 </div>
                 <div className="arduino-toolbar-actions">
                     <button className="arduino-action-btn" onClick={handleRefresh} disabled={isRefreshing} title="Update Index">
-                        <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                        <RefreshCw size={16} className={isRefreshing ? 'arduino-animate-spin' : ''} />
                         Refresh
                     </button>
                     <button className="arduino-action-btn" onClick={() => setShowSettings(true)} title="Additional URLs">
@@ -155,7 +194,7 @@ const BoardsManager: React.FC = () => {
             <div className="arduino-items-list">
                 {isLoading ? (
                     <div className="arduino-loading-state">
-                        <RefreshCw size={24} className="animate-spin" />
+                        <RefreshCw size={24} className="arduino-animate-spin" />
                         <p>Searching for boards...</p>
                     </div>
                 ) : platforms.length === 0 ? (
@@ -184,7 +223,12 @@ const BoardsManager: React.FC = () => {
                                 )}
                             </div>
                             <div className="arduino-item-actions">
-                                {platform.installed_version ? (
+                                {installingIds.has(platform.id) ? (
+                                    <div className="arduino-installing-state">
+                                        <Loader2 size={16} className="arduino-animate-spin" />
+                                        <span>Processing...</span>
+                                    </div>
+                                ) : platform.installed_version ? (
                                     <div className="arduino-installed-status">
                                         <div className="arduino-status-info">
                                             <CheckCircle2 size={14} className="arduino-success-icon" />

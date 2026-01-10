@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useSearchParams, useParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus } from 'lucide-react';
+import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus, BookOpen } from 'lucide-react';
 import './IDELayout.css';
 import FileExplorer from './components/FileExplorer';
 import CodeEditor, { type CodeEditorHandle } from './components/CodeEditor';
@@ -15,6 +15,7 @@ import PropertiesPanel from './components/PropertiesPanel';
 import LessonToolbar from './components/LessonToolbar';
 import UpdateLibraryButton from './components/UpdateLibraryButton';
 import ArduinoManagerModal from './components/ArduinoManagerModal';
+import ExampleBrowser from './components/ExampleBrowser';
 import { useDevice } from '../../../context/DeviceContext';
 
 interface Project {
@@ -22,10 +23,12 @@ interface Project {
     name: string;
     type: 'code' | 'design';
     path?: string;
+    readOnly?: boolean;
 }
 
 const IDELayout: React.FC = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const lessonId = searchParams.get('lessonId');
     const classId = searchParams.get('classId');
     const isLessonMode = !!(lessonId && classId);
@@ -41,22 +44,51 @@ const IDELayout: React.FC = () => {
     const { projectId } = useParams();
     const [activeProjectId, setActiveProjectId] = useState(projectId || '1');
     const [projects, setProjects] = useState<Project[]>([]);
+    const [openProjects, setOpenProjects] = useState<Project[]>([]);
+
+    const fetchProjects = async () => {
+        try {
+            const response = await fetch('http://localhost:3001/api/projects');
+            const data = await response.json();
+            if (data.success) {
+                setProjects(data.projects);
+            }
+        } catch (error) {
+            console.error('Failed to fetch projects:', error);
+        }
+    };
 
     React.useEffect(() => {
-        const fetchProjects = async () => {
-            try {
-                const response = await fetch('http://localhost:3001/api/projects');
-                const data = await response.json();
-                if (data.success) {
-                    setProjects(data.projects);
-                }
-            } catch (error) {
-                console.error('Failed to fetch projects:', error);
-            }
-        };
         fetchProjects();
     }, []);
-    const [activeTab, setActiveTab] = useState<'files' | 'blocks' | 'ai'>('files');
+
+    // Initialize openProjects from localStorage or active project
+    React.useEffect(() => {
+        if (projects.length > 0 && openProjects.length === 0) {
+            const savedIdsStr = localStorage.getItem('arduino_ide_open_projects');
+            let initialOpenProjects: Project[] = [];
+
+            if (savedIdsStr) {
+                const savedIds = JSON.parse(savedIdsStr) as string[];
+                initialOpenProjects = projects.filter(p => savedIds.includes(p.id));
+            }
+
+            // Ensure active project is always included
+            const activeProject = projects.find(p => p.id === activeProjectId) || projects[0];
+            if (activeProject && !initialOpenProjects.find(p => p.id === activeProject.id)) {
+                initialOpenProjects.push(activeProject);
+            }
+
+            if (initialOpenProjects.length > 0) {
+                setOpenProjects(initialOpenProjects);
+                localStorage.setItem('arduino_ide_open_projects', JSON.stringify(initialOpenProjects.map(p => p.id)));
+                if (!initialOpenProjects.find(p => p.id === activeProjectId)) {
+                    setActiveProjectId(initialOpenProjects[0].id);
+                }
+            }
+        }
+    }, [projects]);
+    const [activeTab, setActiveTab] = useState<'files' | 'blocks' | 'ai' | 'examples'>('files');
     const [isTerminalOpen, setIsTerminalOpen] = useState(true);
     const [activeTerminalId, setActiveTerminalId] = useState('1');
     const [terminals, setTerminals] = useState([{ id: '1', name: 'Terminal 1', type: 'terminal' }]);
@@ -215,6 +247,80 @@ const IDELayout: React.FC = () => {
         }
     }, [projects, activeProject]);
 
+    const handleOpenExample = async (library: string, example: string) => {
+        try {
+            const response = await fetch('http://localhost:3001/api/arduino/libraries/examples/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ library, example, mode: 'preview' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const newProject = data.project;
+                // If it's already in projects, just switch to it
+                const existing = projects.find(p => p.id === newProject.id);
+                if (!existing) {
+                    setProjects(prev => [...prev, newProject]);
+                }
+                // Add to open projects if not already there
+                setOpenProjects(prev => {
+                    if (prev.find(p => p.id === newProject.id)) return prev;
+                    const next = [...prev, newProject];
+                    localStorage.setItem('arduino_ide_open_projects', JSON.stringify(next.map(p => p.id)));
+                    return next;
+                });
+                setActiveProjectId(newProject.id);
+                setActiveTab('files'); // Switch to files view to see the example
+                setIsDirty(false); // New project, no unsaved changes
+            }
+        } catch (error) {
+            console.error('Failed to open example:', error);
+        }
+    };
+
+    const handleCloneExample = async () => {
+        if (!activeProject || !activeProject.readOnly) return;
+
+        // Extract library and example from ID if it's a preview ID
+        const parts = activeProject.id.split('-');
+        if (parts[0] !== 'preview') return;
+
+        const library = parts[1];
+        const example = parts[2];
+
+        try {
+            setSaveStatus('saving');
+            const response = await fetch('http://localhost:3001/api/arduino/libraries/examples/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ library, example, mode: 'clone' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const newProject = data.project;
+                // Replace preview project with cloned project in openProjects
+                setOpenProjects(prev => {
+                    const filtered = prev.filter(p => p.id !== activeProject.id);
+                    const next = [...filtered, newProject];
+                    localStorage.setItem('arduino_ide_open_projects', JSON.stringify(next.map(p => p.id)));
+                    return next;
+                });
+
+                // Update projects list
+                setProjects(prev => [...prev, newProject]);
+                setActiveProjectId(newProject.id);
+                setIsDirty(false);
+                setSaveStatus('saved');
+            } else {
+                setSaveStatus('error');
+                alert('Failed to clone example: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Failed to clone example:', error);
+            setSaveStatus('error');
+        }
+    };
+
     if (projects.length === 0) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -295,7 +401,7 @@ const IDELayout: React.FC = () => {
         }
 
         // Save file before uploading if one is open
-        if (currentFilePath) {
+        if (currentFilePath && !activeProject?.readOnly) { // Only save if not read-only
             const saved = await handleSave();
             if (!saved) return;
         }
@@ -305,7 +411,7 @@ const IDELayout: React.FC = () => {
         // Let's switch to a terminal tab for flashing
         setActiveTerminalId('1');
 
-        const result = await flashCode(code, selectedDeviceSerial, projectRoot || undefined, currentFilePath || undefined);
+        const result = await flashCode(code, selectedDeviceSerial, projectRoot || undefined, currentFilePath || undefined, activeProject?.readOnly);
         if (!result.success) {
             alert(`Upload failed: ${result.error}`);
         }
@@ -333,6 +439,17 @@ const IDELayout: React.FC = () => {
                 return;
             }
         }
+
+        const project = projects.find(p => p.id === id);
+        if (project) {
+            setOpenProjects(prev => {
+                if (prev.find(p => p.id === id)) return prev;
+                const next = [...prev, project];
+                localStorage.setItem('arduino_ide_open_projects', JSON.stringify(next.map(p => p.id)));
+                return next;
+            });
+        }
+
         setActiveProjectId(id);
         setIsDirty(false);
     };
@@ -343,10 +460,17 @@ const IDELayout: React.FC = () => {
                 return;
             }
         }
-        const newProjects = projects.filter(p => p.id !== id);
-        setProjects(newProjects);
-        if (activeProjectId === id && newProjects.length > 0) {
-            setActiveProjectId(newProjects[0].id);
+        const newOpenProjects = openProjects.filter(p => p.id !== id);
+        setOpenProjects(newOpenProjects);
+        localStorage.setItem('arduino_ide_open_projects', JSON.stringify(newOpenProjects.map(p => p.id)));
+
+        if (newOpenProjects.length === 0) {
+            navigate('/projects');
+            return;
+        }
+
+        if (activeProjectId === id) {
+            setActiveProjectId(newOpenProjects[newOpenProjects.length - 1].id);
             setIsDirty(false);
         }
     };
@@ -385,8 +509,10 @@ const IDELayout: React.FC = () => {
             {/* Top Project Tabs - hidden in lesson mode */}
             {!isLessonMode && (
                 <ProjectTabs
-                    projects={projects.map(p => ({
-                        ...p,
+                    projects={openProjects.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        type: p.type,
                         isDirty: p.id === activeProjectId ? isDirty : false
                     }))}
                     activeId={activeProjectId}
@@ -408,7 +534,7 @@ const IDELayout: React.FC = () => {
                     <button className="icon-btn" onClick={handleRedo} title="Redo"><Redo size={18} /></button>
                 </div>
                 <div className="toolbar-center">
-                    <span className="project-name">{activeProject.name}</span>
+                    <span className="project-name">{activeProject?.name}</span>
                 </div>
                 <div className="toolbar-right">
                     {saveStatus !== 'idle' && (
@@ -477,6 +603,19 @@ const IDELayout: React.FC = () => {
                 </div>
             </div>
 
+            {activeProject.readOnly && (
+                <div className="preview-banner">
+                    <div className="preview-info">
+                        <Layers size={16} />
+                        <span><strong>Preview Mode:</strong> You are viewing a library example. Save it to your projects to make changes.</span>
+                    </div>
+                    <button className="clone-btn" onClick={handleCloneExample}>
+                        <Save size={14} />
+                        Save to My Projects
+                    </button>
+                </div>
+            )}
+
             {/* Main Content Area */}
             <div className="ide-content">
                 <PanelGroup direction="horizontal">
@@ -520,6 +659,12 @@ const IDELayout: React.FC = () => {
                             >
                                 <MessageSquare size={16} /> AI
                             </button>
+                            <button
+                                className={`panel-tab ${activeTab === 'examples' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('examples')}
+                            >
+                                <BookOpen size={16} /> Examples
+                            </button>
                         </div>
 
                         <div className="left-panel-content">
@@ -536,6 +681,7 @@ const IDELayout: React.FC = () => {
                             ))}
                             {activeTab === 'blocks' && (isDesignMode ? <ComponentLibrary /> : <BlockLibrary />)}
                             {activeTab === 'ai' && <ChatWorkspace isDesignMode={isDesignMode} />}
+                            {activeTab === 'examples' && <ExampleBrowser onOpenExample={handleOpenExample} />}
                         </div>
                     </Panel>
 
@@ -554,7 +700,7 @@ const IDELayout: React.FC = () => {
                             <PanelGroup direction="vertical">
                                 <Panel className="editor-panel">
                                     {currentFilePath ? (
-                                        <CodeEditor ref={editorRef} code={code} onChange={setCode} />
+                                        <CodeEditor ref={editorRef} code={code} onChange={setCode} readOnly={activeProject?.readOnly} />
                                     ) : (
                                         <div className="editor-empty-state">
                                             <div className="empty-state-content">
@@ -712,7 +858,13 @@ const IDELayout: React.FC = () => {
 
             {/* Arduino Manager Modal */}
             {isArduinoManagerOpen && (
-                <ArduinoManagerModal onClose={() => setIsArduinoManagerOpen(false)} />
+                <ArduinoManagerModal
+                    onClose={() => setIsArduinoManagerOpen(false)}
+                    onOpenExample={(lib, ex) => {
+                        handleOpenExample(lib, ex);
+                        setIsArduinoManagerOpen(false);
+                    }}
+                />
             )}
         </div>
     );

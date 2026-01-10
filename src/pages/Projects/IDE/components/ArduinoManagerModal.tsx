@@ -7,9 +7,10 @@ import './ArduinoManagerModal.css';
 
 interface ArduinoManagerModalProps {
     onClose: () => void;
+    onOpenExample?: (library: string, example: string) => void;
 }
 
-const ArduinoManagerModal: React.FC<ArduinoManagerModalProps> = ({ onClose }) => {
+const ArduinoManagerModal: React.FC<ArduinoManagerModalProps> = ({ onClose, onOpenExample }) => {
     const [activeTab, setActiveTab] = useState<'boards' | 'libraries'>('boards');
     const [isConsoleOpen, setIsConsoleOpen] = useState(false);
     const { arduinoLogs } = useDevice();
@@ -51,7 +52,7 @@ const ArduinoManagerModal: React.FC<ArduinoManagerModalProps> = ({ onClose }) =>
                 </div>
 
                 <div className="arduino-modal-content">
-                    {activeTab === 'boards' ? <BoardsManager /> : <LibraryManager />}
+                    {activeTab === 'boards' ? <BoardsManager /> : <LibraryManager onOpenExample={onOpenExample} />}
                 </div>
 
                 <div className={`arduino-console-panel ${isConsoleOpen ? 'open' : ''}`}>
