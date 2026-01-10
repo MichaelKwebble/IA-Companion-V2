@@ -186,26 +186,58 @@ class LibraryUpdater {
     }
 
     async wrapInSrc() {
-        console.log('[LibraryUpdater] Wrapping library in src folder...');
+        console.log('[LibraryUpdater] Reorganizing library structure...');
 
-        // Create src folder inside the incipe directory
-        const newSrcDir = path.join(this.incipeDir, 'src');
-        await fs.mkdir(newSrcDir, { recursive: true });
+        const outerSrcDir = path.join(this.incipeDir, 'src');
+        const innerSrcDir = path.join(outerSrcDir, 'src');
+        const tmpSrcDir = path.join(this.incipeDir, 'tmp_src');
 
-        // Get all files in the root
-        const entries = await fs.readdir(this.incipeDir);
-
-        for (const entry of entries) {
-            // Skip the 'src' folder itself to avoid infinite recursion/errors
-            if (entry === 'src') continue;
-
-            const oldPath = path.join(this.incipeDir, entry);
-            const newPath = path.join(newSrcDir, entry);
-
-            // Move file/folder into src/
-            // Using rename here is safe because it's within the same directory/drive
-            await fs.rename(oldPath, newPath);
+        // 1. If 'src' exists, rename it to 'tmp_src' so we can reorganize its contents
+        try {
+            await fs.access(outerSrcDir);
+            await fs.rename(outerSrcDir, tmpSrcDir);
+        } catch (e) {
+            // 'src' doesn't exist, that's fine
         }
+
+        // 2. Create the new nested structure
+        await fs.mkdir(innerSrcDir, { recursive: true });
+
+        // 3. Define where things should go
+        const outerItems = ['DataPacket.h', 'incipe.cpp', 'incipe.h', 'incipe.ino'];
+        const innerItems = ['application', 'module', 'screen', 'SensorSync.cpp', 'SensorSync.h'];
+
+        // 4. Function to move items to correct location
+        const distributeItems = async (dir) => {
+            try {
+                const entries = await fs.readdir(dir);
+                for (const entry of entries) {
+                    if (entry === 'src' || entry === 'tmp_src') continue;
+
+                    const oldPath = path.join(dir, entry);
+                    if (outerItems.includes(entry)) {
+                        await fs.rename(oldPath, path.join(outerSrcDir, entry));
+                    } else if (innerItems.includes(entry)) {
+                        await fs.rename(oldPath, path.join(innerSrcDir, entry));
+                    } else if (dir === this.incipeDir && entry !== 'library.properties') {
+                        // If it's something else in the root (except library.properties), 
+                        // move it to inner src to be safe/compact
+                        await fs.rename(oldPath, path.join(innerSrcDir, entry));
+                    }
+                }
+            } catch (e) {
+                // Directory might not exist or be empty
+            }
+        };
+
+        // 5. Reorganize from root and tmp_src
+        await distributeItems(this.incipeDir);
+        await distributeItems(tmpSrcDir);
+
+        // 6. Cleanup
+        try {
+            await fs.rm(tmpSrcDir, { recursive: true, force: true });
+        } catch (e) { }
     }
 }
 

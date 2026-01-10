@@ -30,6 +30,9 @@ const ARDUINO_LIBS_DIR = path.join(ARDUINO_USER_DIR, 'libraries');
 const ARDUINO_SKETCHES_DIR = path.join(ARDUINO_USER_DIR, 'sketches');
 const ARDUINO_YAML_PATH = path.join(ARDUINO_CONFIG_DIR, 'arduino-cli.yaml');
 
+// Keep track of active flash process for cancellation
+let activeFlashProcess = null;
+
 // Multer setup for ZIP uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -74,6 +77,9 @@ board_manager:
   additional_urls: [
     "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
   ]
+
+network:
+  connection_timeout: 10m0s
 `;
     await fs.writeFile(ARDUINO_YAML_PATH, yamlContent.trim(), 'utf-8');
     console.log(`[Arduino] Updated config at ${ARDUINO_YAML_PATH}`);
@@ -109,7 +115,7 @@ async function loadProjects() {
     } catch (e) {
         // Default projects if file doesn't exist
         return [
-            { id: '1', name: 'Blink LED', type: 'code', path: '/Users/michaelcheng/Desktop/Test/Blink_LED', lastModified: '2 mins ago' },
+            { id: '1', name: 'Blink LED', type: 'code', path: path.join(os.homedir(), 'Desktop', 'Blink_LED'), lastModified: '2 mins ago' },
             { id: '2', name: 'Smart Home UI', type: 'design', lastModified: '1 hour ago' },
         ];
     }
@@ -275,6 +281,7 @@ class PortManager {
         let release;
         const newLock = new Promise(resolve => release = resolve);
         const oldMutex = this.mutex;
+        this.mutex = oldMutex.then(() => newLock);
         this.mutex = oldMutex.then(() => newLock);
         return oldMutex.then(() => release);
     }
@@ -867,6 +874,7 @@ app.post('/api/arduino/boards/config/urls', async (req, res) => {
     try {
         const urlsStr = urls.join(',');
         await runArduinoCLI(['config', 'set', 'board_manager.additional_urls', urlsStr]);
+        await runArduinoCLI(['config', 'set', 'network.connection_timeout', '10m0s']);
         await runArduinoCLI(['core', 'update-index']);
         res.json({ success: true });
     } catch (error) {
@@ -1342,6 +1350,7 @@ app.post('/api/flash', async (req, res) => {
             });
 
             child.on('close', (code) => {
+                if (activeFlashProcess === child) activeFlashProcess = null;
                 if (code === 0) resolve();
                 else {
                     const err = new Error(`Command failed with code ${code}`);
@@ -1350,7 +1359,12 @@ app.post('/api/flash', async (req, res) => {
                 }
             });
 
-            child.on('error', (err) => reject(err));
+            child.on('error', (err) => {
+                if (activeFlashProcess === child) activeFlashProcess = null;
+                reject(err);
+            });
+
+            activeFlashProcess = child;
         });
     };
 
@@ -1376,14 +1390,19 @@ app.post('/api/flash', async (req, res) => {
         await fs.mkdir(tempDir, { recursive: true });
 
         if (projectRoot) {
-            const entries = await fs.readdir(projectRoot, { withFileTypes: true });
-            for (const entry of entries) {
-                if (entry.isFile()) {
-                    const ext = path.extname(entry.name);
-                    if (['.ino', '.h', '.cpp', '.c', '.hpp'].includes(ext)) {
-                        await fs.copyFile(path.join(projectRoot, entry.name), path.join(tempDir, entry.name));
+            try {
+                await fs.access(projectRoot);
+                const entries = await fs.readdir(projectRoot, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isFile()) {
+                        const ext = path.extname(entry.name);
+                        if (['.ino', '.h', '.cpp', '.c', '.hpp'].includes(ext)) {
+                            await fs.copyFile(path.join(projectRoot, entry.name), path.join(tempDir, entry.name));
+                        }
                     }
                 }
+            } catch (err) {
+                console.warn(`[Flash] Could not access projectRoot: ${projectRoot}. Proceeding with code-only flash.`);
             }
         }
         await fs.writeFile(path.join(tempDir, `${sketchName}.ino`), code);
@@ -1475,8 +1494,9 @@ app.post('/api/flash', async (req, res) => {
 
     } catch (error) {
         console.error('[Flash] Error:', error);
-        broadcastToClients({ type: 'flash-status', status: 'error', message: error.message });
-        res.status(500).json({ success: false, error: error.message });
+        const errorMessage = error.stderr || error.message || 'Unknown error during flash';
+        broadcastToClients({ type: 'flash-status', status: 'error', message: errorMessage });
+        res.status(500).json({ success: false, error: errorMessage });
     } finally {
         // Release lock
         await portManager.release('FLASHING');
@@ -1496,6 +1516,39 @@ app.post('/api/flash', async (req, res) => {
                 }
             }, 2000); // Give device time to boot
         }
+    }
+});
+
+/**
+ * Endpoint to cancel an active flash process
+ */
+app.post('/api/flash/cancel', (req, res) => {
+    if (activeFlashProcess) {
+        console.log('[Flash] Cancelling active process...');
+
+        // Terminate the process tree
+        if (process.platform === 'win32') {
+            exec(`taskkill /pid ${activeFlashProcess.pid} /T /F`, (err) => {
+                if (err) console.error('[Flash] Failed to kill process on Windows:', err);
+            });
+        } else {
+            try {
+                activeFlashProcess.kill('SIGKILL');
+            } catch (e) {
+                console.error('[Flash] Failed to kill process:', e);
+            }
+        }
+
+        activeFlashProcess = null;
+        broadcastToClients({
+            type: 'flash-status',
+            status: 'error',
+            message: 'Process cancelled by user',
+            progress: 0
+        });
+        res.json({ success: true, message: 'Flash cancelled' });
+    } else {
+        res.json({ success: true, message: 'No active flash process to cancel' });
     }
 });
 
@@ -1677,12 +1730,17 @@ void loop () {
 // API endpoint to set project root
 app.post('/api/config/project-root', async (req, res) => {
     const { rootPath } = req.body;
-    if (!rootPath) return res.status(400).json({ success: false, error: 'rootPath is required' });
+    // Allow empty rootPath to clear current project root
+    if (rootPath === undefined) return res.status(400).json({ success: false, error: 'rootPath is required' });
 
     try {
-        // Verify path exists
-        await fs.access(rootPath);
-        currentProjectRoot = rootPath;
+        if (rootPath) {
+            // Verify path exists
+            await fs.access(rootPath);
+            currentProjectRoot = rootPath;
+        } else {
+            currentProjectRoot = APP_ROOT;
+        }
         console.log(`[Config] Project root updated to: ${currentProjectRoot}`);
         res.json({ success: true, root: currentProjectRoot });
     } catch (error) {

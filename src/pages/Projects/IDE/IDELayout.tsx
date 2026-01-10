@@ -35,10 +35,11 @@ const IDELayout: React.FC = () => {
 
     // Use global device context
     const {
-        isConnected, serialData, terminalLogs,
-        devices, connectedDevice,
+        devices, isConnected, connectedDevice,
         isFlashing, flashProgress, flashMessage,
-        flashCode, sendCommand, runTerminalCommand
+        arduinoLogs, arduinoStatus, clearLog,
+        flashCode, cancelFlash, serialData, terminalLogs,
+        sendCommand, runTerminalCommand
     } = useDevice();
 
     const { projectId } = useParams();
@@ -161,7 +162,7 @@ const IDELayout: React.FC = () => {
                     const response = await fetch('http://localhost:3001/api/config/project-root', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ rootPath: rootPath || '/Users/michaelcheng/Desktop/IA Companion V2' }) // Fallback to default
+                        body: JSON.stringify({ rootPath: rootPath || '' }) // Empty means default/skipped
                     });
                     const data = await response.json();
                     if (data.success) {
@@ -823,6 +824,26 @@ const IDELayout: React.FC = () => {
                                                                 className="flash-progress-bar-fill"
                                                                 style={{ width: `${flashProgress}%` }}
                                                             />
+                                                        </div>
+                                                        <div className="flex justify-end" style={{ marginTop: '10px' }}>
+                                                            <button
+                                                                onClick={() => cancelFlash()}
+                                                                style={{
+                                                                    backgroundColor: 'transparent',
+                                                                    color: 'white',
+                                                                    padding: '8px 24px',
+                                                                    borderRadius: '6px',
+                                                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 500,
+                                                                    transition: 'all 0.2s',
+                                                                    fontSize: '14px'
+                                                                }}
+                                                                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)')}
+                                                                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                                            >
+                                                                Cancel
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>

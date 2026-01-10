@@ -25,6 +25,7 @@ interface DeviceContextType {
     sendCommand: (command: string) => void;
     runTerminalCommand: (command: string) => void;
     flashCode: (code: string, usbSerial: string, projectRoot?: string, currentFilePath?: string, isReadOnly?: boolean) => Promise<any>;
+    cancelFlash: () => Promise<void>;
     clearLog: () => void;
 }
 
@@ -92,6 +93,15 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, []);
 
+    const cancelFlash = useCallback(async () => {
+        try {
+            await fetch('http://localhost:3001/api/flash/cancel', { method: 'POST' });
+            setIsFlashing(false);
+        } catch (err) {
+            console.error('[DeviceContext] Cancel error:', err);
+        }
+    }, []);
+
     // Global auto-connect logic - works from any page
     useEffect(() => {
         // If we have devices but are not connected, try to auto-connect
@@ -136,6 +146,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         sendCommand,
         runTerminalCommand,
         flashCode,
+        cancelFlash,
         clearLog
     };
 
