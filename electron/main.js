@@ -190,54 +190,58 @@ class LibraryUpdater {
 
         const outerSrcDir = path.join(this.incipeDir, 'src');
         const innerSrcDir = path.join(outerSrcDir, 'src');
-        const tmpSrcDir = path.join(this.incipeDir, 'tmp_src');
+        const boxDir = path.join(this.incipeDir, 'reorg_box');
 
-        // 1. If 'src' exists, rename it to 'tmp_src' so we can reorganize its contents
         try {
-            await fs.access(outerSrcDir);
-            await fs.rename(outerSrcDir, tmpSrcDir);
-        } catch (e) {
-            // 'src' doesn't exist, that's fine
-        }
+            // 1. Create a temporary "box" to hold all contents
+            await fs.mkdir(boxDir, { recursive: true });
 
-        // 2. Create the new nested structure
-        await fs.mkdir(innerSrcDir, { recursive: true });
-
-        // 3. Define where things should go
-        const outerItems = ['DataPacket.h', 'incipe.cpp', 'incipe.h', 'incipe.ino'];
-        const innerItems = ['application', 'module', 'screen', 'SensorSync.cpp', 'SensorSync.h'];
-
-        // 4. Function to move items to correct location
-        const distributeItems = async (dir) => {
-            try {
-                const entries = await fs.readdir(dir);
-                for (const entry of entries) {
-                    if (entry === 'src' || entry === 'tmp_src') continue;
-
-                    const oldPath = path.join(dir, entry);
-                    if (outerItems.includes(entry)) {
-                        await fs.rename(oldPath, path.join(outerSrcDir, entry));
-                    } else if (innerItems.includes(entry)) {
-                        await fs.rename(oldPath, path.join(innerSrcDir, entry));
-                    } else if (dir === this.incipeDir && entry !== 'library.properties') {
-                        // If it's something else in the root (except library.properties), 
-                        // move it to inner src to be safe/compact
-                        await fs.rename(oldPath, path.join(innerSrcDir, entry));
-                    }
-                }
-            } catch (e) {
-                // Directory might not exist or be empty
+            // 2. Move items from root into the box (except metadata/box itself)
+            const rootEntries = await fs.readdir(this.incipeDir);
+            for (const entry of rootEntries) {
+                if (['src', 'reorg_box', 'library.properties', 'version.json'].includes(entry)) continue;
+                await fs.rename(path.join(this.incipeDir, entry), path.join(boxDir, entry));
             }
-        };
 
-        // 5. Reorganize from root and tmp_src
-        await distributeItems(this.incipeDir);
-        await distributeItems(tmpSrcDir);
+            // 3. Move items from existing src into the box, then delete src
+            try {
+                const srcEntries = await fs.readdir(outerSrcDir);
+                for (const entry of srcEntries) {
+                    if (entry === 'src') continue; // Avoid self-nesting if already partially wrapped
+                    await fs.rename(path.join(outerSrcDir, entry), path.join(boxDir, entry));
+                }
+                await fs.rm(outerSrcDir, { recursive: true, force: true });
+            } catch (e) {
+                // src might not exist, that's fine
+            }
 
-        // 6. Cleanup
-        try {
-            await fs.rm(tmpSrcDir, { recursive: true, force: true });
-        } catch (e) { }
+            // 4. Create the new nested structure fresh
+            await fs.mkdir(innerSrcDir, { recursive: true });
+
+            // 5. Define where things should go
+            const outerItems = ['DataPacket.h', 'incipe.cpp', 'incipe.h', 'incipe.ino'];
+            const innerItems = ['application', 'module', 'screen', 'SensorSync.cpp', 'SensorSync.h'];
+
+            // 6. Distribute items from the box to their final homes
+            const boxEntries = await fs.readdir(boxDir);
+            for (const entry of boxEntries) {
+                const oldPath = path.join(boxDir, entry);
+                if (outerItems.includes(entry)) {
+                    await fs.rename(oldPath, path.join(outerSrcDir, entry));
+                } else {
+                    // Everything else goes to inner src/src/
+                    await fs.rename(oldPath, path.join(innerSrcDir, entry));
+                }
+            }
+
+            // 7. Cleanup
+            await fs.rm(boxDir, { recursive: true, force: true });
+
+        } catch (error) {
+            console.error('[LibraryUpdater] Reorganization failed:', error);
+            // Try to cleanup box if it exists but failed midway
+            try { await fs.rm(boxDir, { recursive: true, force: true }); } catch (e) { }
+        }
     }
 }
 
