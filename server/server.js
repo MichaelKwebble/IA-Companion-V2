@@ -44,23 +44,18 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Helper to sanitize paths for YAML (Windows backslash fix)
+// Helper to sanitize paths for YAML and Env (Force POSIX)
 function sanitizePath(p) {
-    if (process.platform === 'win32') {
-        // On Windows, ensure we use double backslashes for YAML double-quoted paths
-        // First normalize to ensure native backslashes
-        const normalized = path.win32.normalize(p);
-        return normalized.replace(/\\/g, '\\\\');
-    }
+    if (!p) return p;
     return p.replace(/\\/g, '/');
 }
 
 // Common environment for all arduino-cli calls - use standard arduino-cli env keys
 const ARDUINO_ENV = {
     ...process.env,
-    ARDUINO_DIRECTORIES_DATA: ARDUINO_DATA_DIR,
-    ARDUINO_DIRECTORIES_USER: ARDUINO_USER_DIR,
-    ARDUINO_DIRECTORIES_DOWNLOADS: ARDUINO_DOWNLOADS_DIR
+    ARDUINO_DIRECTORIES_DATA: sanitizePath(ARDUINO_DATA_DIR),
+    ARDUINO_DIRECTORIES_USER: sanitizePath(ARDUINO_USER_DIR),
+    ARDUINO_DIRECTORIES_DOWNLOADS: sanitizePath(ARDUINO_DOWNLOADS_DIR)
 };
 
 // Ensure Arduino directories exist
