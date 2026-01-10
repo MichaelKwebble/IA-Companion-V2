@@ -1,5 +1,5 @@
 build_cache:
-    compilation_count_since_last_purge: 0
+    compilation_count_since_last_purge: 2
 installation:
     id: f1326e3e-a23a-453f-9857-105a26a981f6
     secret: 7d442ef2-7104-45fe-b4b2-cc5a98cbea02

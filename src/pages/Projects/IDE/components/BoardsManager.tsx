@@ -24,6 +24,7 @@ const BoardsManager: React.FC = () => {
     const [additionalUrls, setAdditionalUrls] = useState<string[]>([]);
     const [newUrl, setNewUrl] = useState('');
     const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+    const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
     const { arduinoStatus } = useDevice();
 
     const fetchPlatforms = async (query = '') => {
@@ -228,27 +229,49 @@ const BoardsManager: React.FC = () => {
                                         <Loader2 size={16} className="arduino-animate-spin" />
                                         <span>Processing...</span>
                                     </div>
-                                ) : platform.installed_version ? (
-                                    <div className="arduino-installed-status">
-                                        <div className="arduino-status-info">
-                                            <CheckCircle2 size={14} className="arduino-success-icon" />
-                                            <span>Version {platform.installed_version} installed</span>
-                                        </div>
-                                        <div className="arduino-btn-group">
-                                            {platform.latest_version && platform.latest_version !== platform.installed_version && (
-                                                <button className="arduino-btn-update" onClick={() => handleInstall(platform.id, platform.latest_version)}>
-                                                    Update to {platform.latest_version}
-                                                </button>
-                                            )}
-                                            <button className="arduino-btn-remove" onClick={() => handleUninstall(platform.id)}>
-                                                <Trash2 size={14} /> Remove
-                                            </button>
-                                        </div>
-                                    </div>
                                 ) : (
-                                    <button className="arduino-btn-install" onClick={() => handleInstall(platform.id)}>
-                                        <Download size={14} /> Install
-                                    </button>
+                                    <div className="arduino-actions-wrapper">
+                                        {platform.versions && platform.versions.length > 0 && (
+                                            <select
+                                                className="arduino-version-select"
+                                                value={selectedVersions[platform.id] || platform.latest_version || platform.versions[0]}
+                                                onChange={(e) => setSelectedVersions(prev => ({ ...prev, [platform.id]: e.target.value }))}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {platform.versions.map(v => (
+                                                    <option key={v} value={v}>{v}</option>
+                                                ))}
+                                            </select>
+                                        )}
+
+                                        {platform.installed_version ? (
+                                            <div className="arduino-installed-status">
+                                                <div className="arduino-status-info">
+                                                    <CheckCircle2 size={14} className="arduino-success-icon" />
+                                                    <span>Version {platform.installed_version} installed</span>
+                                                </div>
+                                                <div className="arduino-btn-group">
+                                                    <button
+                                                        className="arduino-btn-install"
+                                                        onClick={() => handleInstall(platform.id, selectedVersions[platform.id] || platform.latest_version)}
+                                                        disabled={platform.installed_version === (selectedVersions[platform.id] || platform.latest_version)}
+                                                    >
+                                                        {platform.installed_version === (selectedVersions[platform.id] || platform.latest_version) ? 'Installed' : 'Install'}
+                                                    </button>
+                                                    <button className="arduino-btn-remove" onClick={() => handleUninstall(platform.id)}>
+                                                        <Trash2 size={14} /> Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                className="arduino-btn-install"
+                                                onClick={() => handleInstall(platform.id, selectedVersions[platform.id] || platform.latest_version)}
+                                            >
+                                                <Download size={14} /> Install
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>

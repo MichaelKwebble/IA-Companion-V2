@@ -12,6 +12,7 @@ interface Library {
     installed_version?: string;
     category?: string;
     website?: string;
+    versions?: string[];
 }
 
 interface LibraryManagerProps {
@@ -29,6 +30,7 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
     const [expandedExamples, setExpandedExamples] = useState<string | null>(null);
     const [libExamples, setLibExamples] = useState<Record<string, string[]>>({});
     const [loadingExamples, setLoadingExamples] = useState<string | null>(null);
+    const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
     const { arduinoStatus } = useDevice();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,15 +53,24 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                 let results = [];
                 if (data.data.libraries) {
                     // Search results
-                    results = data.data.libraries.map((lib: any) => ({
-                        name: lib.name,
-                        author: lib.latest.author,
-                        description: lib.latest.sentence,
-                        version: lib.latest.version,
-                        latest_version: lib.latest.version,
-                        category: lib.latest.category,
-                        website: lib.latest.website
-                    }));
+                    results = data.data.libraries.map((lib: any) => {
+                        // Extract versions from releases object if available
+                        const versions = lib.releases ? Object.keys(lib.releases).sort((a, b) => {
+                            // Sort versions descending (newest first)
+                            return b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' });
+                        }) : [lib.latest?.version || '0.0.0'];
+
+                        return {
+                            name: lib.name,
+                            author: lib.latest.author,
+                            description: lib.latest.sentence,
+                            version: lib.latest.version,
+                            latest_version: lib.latest.version,
+                            category: lib.latest.category,
+                            website: lib.latest.website,
+                            versions: versions
+                        };
+                    });
                     setIsLimited(data.data.libraries.length >= 100);
                 } else if (data.data.installed_libraries) {
                     // List results
@@ -71,7 +82,10 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                         latest_version: item.release?.version || item.library.version,
                         installed_version: item.library.version,
                         category: item.library.category,
-                        website: item.library.website
+                        website: item.library.website,
+                        // For installed list, we might not have all versions unless we merge with search results
+                        // But we can at least show the installed version
+                        versions: item.release ? Object.keys(item.release).sort((a, b) => b.localeCompare(a, undefined, { numeric: true })) : [item.library.version]
                     }));
                 }
 
@@ -355,31 +369,53 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                                             <Loader2 size={16} className="arduino-animate-spin" />
                                             <span>Processing...</span>
                                         </div>
-                                    ) : lib.installed_version ? (
-                                        <div className="arduino-installed-status">
-                                            <div className="arduino-status-info">
-                                                <CheckCircle2 size={14} className="arduino-success-icon" />
-                                                <span>Version {lib.installed_version} installed</span>
-                                            </div>
-                                            <div className="arduino-btn-group">
-                                                {lib.latest_version && lib.latest_version !== lib.installed_version && (
-                                                    <button className="arduino-btn-update" onClick={() => handleInstall(lib.name, lib.latest_version)}>
-                                                        Update to {lib.latest_version}
-                                                    </button>
-                                                )}
-                                                <button className="arduino-btn-examples" onClick={() => handleFetchExamples(lib.name)}>
-                                                    {loadingExamples === lib.name ? <Loader2 size={14} className="arduino-animate-spin" /> : expandedExamples === lib.name ? <ChevronDown size={14} /> : <BookOpen size={14} />}
-                                                    Examples
-                                                </button>
-                                                <button className="arduino-btn-remove" onClick={() => handleUninstall(lib.name)}>
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        </div>
                                     ) : (
-                                        <button className="arduino-btn-install" onClick={() => handleInstall(lib.name)}>
-                                            Install
-                                        </button>
+                                        <div className="arduino-actions-wrapper">
+                                            {lib.versions && lib.versions.length > 0 && (
+                                                <select
+                                                    className="arduino-version-select"
+                                                    value={selectedVersions[lib.name] || lib.latest_version || lib.versions[0]}
+                                                    onChange={(e) => setSelectedVersions(prev => ({ ...prev, [lib.name]: e.target.value }))}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {lib.versions.map(v => (
+                                                        <option key={v} value={v}>{v}</option>
+                                                    ))}
+                                                </select>
+                                            )}
+
+                                            {lib.installed_version ? (
+                                                <div className="arduino-installed-status">
+                                                    <div className="arduino-status-info">
+                                                        <CheckCircle2 size={14} className="arduino-success-icon" />
+                                                        <span>Version {lib.installed_version} installed</span>
+                                                    </div>
+                                                    <div className="arduino-btn-group">
+                                                        <button
+                                                            className="arduino-btn-install"
+                                                            onClick={() => handleInstall(lib.name, selectedVersions[lib.name] || lib.latest_version)}
+                                                            disabled={lib.installed_version === (selectedVersions[lib.name] || lib.latest_version)}
+                                                        >
+                                                            {lib.installed_version === (selectedVersions[lib.name] || lib.latest_version) ? 'Installed' : 'Install'}
+                                                        </button>
+                                                        <button className="arduino-btn-examples" onClick={() => handleFetchExamples(lib.name)}>
+                                                            {loadingExamples === lib.name ? <Loader2 size={14} className="arduino-animate-spin" /> : expandedExamples === lib.name ? <ChevronDown size={14} /> : <BookOpen size={14} />}
+                                                            Examples
+                                                        </button>
+                                                        <button className="arduino-btn-remove" onClick={() => handleUninstall(lib.name)}>
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    className="arduino-btn-install"
+                                                    onClick={() => handleInstall(lib.name, selectedVersions[lib.name] || lib.latest_version)}
+                                                >
+                                                    Install
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 {expandedExamples === lib.name && libExamples[lib.name] && (
