@@ -32,12 +32,20 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
     const { arduinoStatus } = useDevice();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const lastRequestIdRef = useRef<number>(0);
+
     const fetchLibraries = async (query = '') => {
+        const requestId = Date.now();
+        lastRequestIdRef.current = requestId;
+
         setIsLoading(true);
         try {
             const endpoint = query ? `search?query=${encodeURIComponent(query)}` : (filter === 'all' ? 'search' : `list${filter === 'updatable' ? '?updatable=true' : ''}`);
             const response = await fetch(`http://localhost:3001/api/arduino/libraries/${endpoint}`);
             const data = await response.json();
+
+            // Check if this is still the latest request
+            if (lastRequestIdRef.current !== requestId) return;
 
             if (data.success) {
                 let results = [];
@@ -70,6 +78,10 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                 // Fetch installed libraries to merge status if we are searching or showing all
                 if (query || filter === 'all') {
                     const installedRes = await fetch('http://localhost:3001/api/arduino/libraries/list');
+
+                    // Check again after second await
+                    if (lastRequestIdRef.current !== requestId) return;
+
                     const installedData = await installedRes.json();
                     if (installedData.success) {
                         const installed = installedData.data.installed_libraries || [];
@@ -89,7 +101,10 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
         } catch (error) {
             console.error('Failed to fetch libraries:', error);
         } finally {
-            setIsLoading(false);
+            // Only turn off loading if this was the latest request
+            if (lastRequestIdRef.current === requestId) {
+                setIsLoading(false);
+            }
         }
     };
 
