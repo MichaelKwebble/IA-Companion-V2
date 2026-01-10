@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "main": "electron/main.js",
+  "engines": {
+    "node": ">=20.12.0"
+  },
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite\"",
     "server": "cd server && npm start",
