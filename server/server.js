@@ -58,10 +58,8 @@ async function initArduinoDirs() {
     }
 
     // Generate arduino-cli.yaml if it doesn't exist
-    try {
-        await fs.access(ARDUINO_YAML_PATH);
-    } catch (e) {
-        const yamlContent = `
+    // Always regenerate arduino-cli.yaml to ensure correct absolute paths for the current user
+    const yamlContent = `
 directories:
   data: "${ARDUINO_DATA_DIR}"
   downloads: "${ARDUINO_DOWNLOADS_DIR}"
@@ -72,9 +70,8 @@ board_manager:
     "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
   ]
 `;
-        await fs.writeFile(ARDUINO_YAML_PATH, yamlContent.trim(), 'utf-8');
-        console.log(`[Arduino] Created config at ${ARDUINO_YAML_PATH}`);
-    }
+    await fs.writeFile(ARDUINO_YAML_PATH, yamlContent.trim(), 'utf-8');
+    console.log(`[Arduino] Updated config at ${ARDUINO_YAML_PATH}`);
 }
 
 // Helper to run arduino-cli with config
