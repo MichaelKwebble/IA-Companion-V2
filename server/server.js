@@ -41,6 +41,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// Helper to sanitize paths for YAML (Windows backslash fix)
+function sanitizePath(p) {
+    return p.split(path.sep).join('/');
+}
+
 // Ensure Arduino directories exist
 async function initArduinoDirs() {
     const dirs = [
@@ -57,13 +62,13 @@ async function initArduinoDirs() {
         await fs.mkdir(dir, { recursive: true });
     }
 
-    // Generate arduino-cli.yaml if it doesn't exist
     // Always regenerate arduino-cli.yaml to ensure correct absolute paths for the current user
+    // We sanitize paths to use forward slashes, which works on both Windows and Mac and avoids YAML escape issues
     const yamlContent = `
 directories:
-  data: "${ARDUINO_DATA_DIR}"
-  downloads: "${ARDUINO_DOWNLOADS_DIR}"
-  user: "${ARDUINO_USER_DIR}"
+  data: "${sanitizePath(ARDUINO_DATA_DIR)}"
+  downloads: "${sanitizePath(ARDUINO_DOWNLOADS_DIR)}"
+  user: "${sanitizePath(ARDUINO_USER_DIR)}"
 
 board_manager:
   additional_urls: [
@@ -458,7 +463,7 @@ async function findSerialPortPath(usbSerial, options = {}) {
 }
 
 /**
- * Execute ioreg and detect ESP32-S3 devices
+ * Execute cross-platform device detection using SerialPort
  */
 async function detectDevices() {
     // Check if we can scan
@@ -467,17 +472,35 @@ async function detectDevices() {
         return [];
     }
 
-    // If MANUAL connection is active, we can still scan but shouldn't touch the open port
-    // For now, simple logic: if FLASHING, skip.
-
     try {
-        // console.log('[Device Detection] Querying USB devices via ioreg...'); // Reduce log spam
-        const { stdout } = await execAsync('ioreg -p IOUSB -l -w 0');
-        const devices = parseIoregOutput(stdout);
-        // console.log(`[Device Detection] Found ${devices.length} ESP32-S3 device(s)`);
+        const ports = await SerialPort.list();
+        const devices = [];
+
+        for (const port of ports) {
+            // Check for ESP32-S3 based on Vendor/Product ID
+            // Vendor ID: 12346 (0x303A)
+            // Product ID: 4097 (0x1001)
+            // SerialPort returns IDs as strings (sometimes hex, sometimes decimal depending on OS)
+            // We parse them to be safe
+            const vendorId = parseInt(port.vendorId, 16);
+            const productId = parseInt(port.productId, 16);
+
+            if (vendorId === TARGET_VENDOR_ID && productId === TARGET_PRODUCT_ID) {
+                devices.push({
+                    usbSerial: port.serialNumber || 'UNKNOWN',
+                    vendorId: vendorId,
+                    productId: productId,
+                    deviceName: 'IA Kit Pro',
+                    detectedAt: new Date().toISOString(),
+                    portPath: port.path
+                });
+                // console.log(`[Device Detection] Found ESP32-S3 on ${port.path}`);
+            }
+        }
+
         return devices;
     } catch (error) {
-        console.error('[Device Detection] Error executing ioreg:', error.message);
+        console.error('[Device Detection] Error listing ports:', error.message);
         return [];
     }
 }

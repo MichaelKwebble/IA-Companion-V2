@@ -187,27 +187,25 @@ class LibraryUpdater {
 
     async wrapInSrc() {
         console.log('[LibraryUpdater] Wrapping library in src folder...');
-        const tempDir = path.join(os.tmpdir(), `incipe-wrap-${Date.now()}`);
-        await fs.mkdir(tempDir, { recursive: true });
 
-        // Move everything from incipeDir to tempDir
-        const entries = await fs.readdir(this.incipeDir);
-        for (const entry of entries) {
-            await fs.rename(path.join(this.incipeDir, entry), path.join(tempDir, entry));
-        }
-
-        // Create src folder
+        // Create src folder inside the incipe directory
         const newSrcDir = path.join(this.incipeDir, 'src');
         await fs.mkdir(newSrcDir, { recursive: true });
 
-        // Move everything back into incipeDir/src/
-        const tempEntries = await fs.readdir(tempDir);
-        for (const entry of tempEntries) {
-            await fs.rename(path.join(tempDir, entry), path.join(newSrcDir, entry));
-        }
+        // Get all files in the root
+        const entries = await fs.readdir(this.incipeDir);
 
-        // Cleanup tempDir
-        await fs.rm(tempDir, { recursive: true, force: true });
+        for (const entry of entries) {
+            // Skip the 'src' folder itself to avoid infinite recursion/errors
+            if (entry === 'src') continue;
+
+            const oldPath = path.join(this.incipeDir, entry);
+            const newPath = path.join(newSrcDir, entry);
+
+            // Move file/folder into src/
+            // Using rename here is safe because it's within the same directory/drive
+            await fs.rename(oldPath, newPath);
+        }
     }
 }
 
