@@ -46,16 +46,21 @@ const upload = multer({ storage: storage });
 
 // Helper to sanitize paths for YAML (Windows backslash fix)
 function sanitizePath(p) {
-    // Forward slashes are safe and preferred in arduino-cli.yaml even on Windows
+    if (process.platform === 'win32') {
+        // On Windows, ensure we use double backslashes for YAML double-quoted paths
+        // First normalize to ensure native backslashes
+        const normalized = path.win32.normalize(p);
+        return normalized.replace(/\\/g, '\\\\');
+    }
     return p.replace(/\\/g, '/');
 }
 
-// Common environment for all arduino-cli calls
+// Common environment for all arduino-cli calls - use standard arduino-cli env keys
 const ARDUINO_ENV = {
     ...process.env,
-    ARDUINO_DATA_DIR: ARDUINO_DATA_DIR,
-    ARDUINO_USER_DIR: ARDUINO_USER_DIR,
-    ARDUINO_DOWNLOADS_DIR: ARDUINO_DOWNLOADS_DIR
+    ARDUINO_DIRECTORIES_DATA: ARDUINO_DATA_DIR,
+    ARDUINO_DIRECTORIES_USER: ARDUINO_USER_DIR,
+    ARDUINO_DIRECTORIES_DOWNLOADS: ARDUINO_DOWNLOADS_DIR
 };
 
 // Ensure Arduino directories exist
@@ -1279,11 +1284,13 @@ app.post('/api/flash', async (req, res) => {
         const { startProgress = 0, endProgress = 100, stage = 'Processing' } = options;
 
         return new Promise((resolve, reject) => {
-            const fullCommand = `${command} ${args.map(a => `"${a}"`).join(' ')}`;
-            console.log(`[Flash] Running: ${fullCommand}`);
-            const child = spawn(fullCommand, {
+            console.log(`[Flash] Running: ${command} ${args.join(' ')}`);
+
+            // On Windows, shell: true is often needed for commands that might be .exe or .cmd
+            // but we pass args as an array for safe quoting
+            const child = spawn(command, args, {
                 cwd: options.cwd || process.cwd(),
-                shell: true,
+                shell: process.platform === 'win32',
                 env: ARDUINO_ENV
             });
             let lastProgress = startProgress;
