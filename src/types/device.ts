@@ -4,6 +4,7 @@ export interface ESP32Device {
     productId: number;
     deviceName: string;
     detectedAt: string;
+    portPath?: string;
 }
 
 export interface DeviceResponse {

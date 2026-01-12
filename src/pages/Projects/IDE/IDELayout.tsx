@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus, BookOpen } from 'lucide-react';
+import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus, BookOpen, Cpu, Usb, ChevronRight } from 'lucide-react';
 import './IDELayout.css';
 import FileExplorer from './components/FileExplorer';
 import CodeEditor, { type CodeEditorHandle } from './components/CodeEditor';
@@ -16,6 +16,7 @@ import LessonToolbar from './components/LessonToolbar';
 import UpdateLibraryButton from './components/UpdateLibraryButton';
 import ArduinoManagerModal from './components/ArduinoManagerModal';
 import ExampleBrowser from './components/ExampleBrowser';
+import BoardPortSelectorModal from './components/BoardPortSelectorModal';
 import { useDevice } from '../../../context/DeviceContext';
 
 interface Project {
@@ -35,11 +36,15 @@ const IDELayout: React.FC = () => {
 
     // Use global device context
     const {
-        devices, isConnected, connectedDevice,
-        isFlashing, flashProgress, flashMessage,
-        arduinoLogs, arduinoStatus, clearLog,
+        devices, connectToDevice, isConnected, connectedDevice,
+        isFlashing, isConnecting, flashProgress, flashMessage,
         flashCode, cancelFlash, serialData, terminalLogs,
-        sendCommand, runTerminalCommand
+        sendCommand, runTerminalCommand,
+        selectedBoard, selectedPort, setSelectedBoard, setSelectedPort,
+        connectionMode, setConnectionMode,
+        showDevicePicker, setShowDevicePicker,
+        connectionError,
+        manualConnect, manualDisconnect
     } = useDevice();
 
     const { projectId } = useParams();
@@ -99,7 +104,62 @@ const IDELayout: React.FC = () => {
     const [projectRoot, setProjectRoot] = useState<string | null>(null);
     const [isCreatingFile, setIsCreatingFile] = useState(false);
     const [isArduinoManagerOpen, setIsArduinoManagerOpen] = useState(false);
+    const [isBoardSelectorOpen, setIsBoardSelectorOpen] = useState(false);
     const editorRef = React.useRef<CodeEditorHandle>(null);
+
+    // Auto-connect/disconnect serial when switching to/from serial tab
+    useEffect(() => {
+        console.log('[IDELayout] Tab switch effect triggered:', {
+            activeTerminalId,
+            isTerminalOpen,
+            connectionMode,
+            isConnected,
+            isConnecting,
+            selectedPort,
+            justDisconnected: justDisconnectedForTabSwitch.current
+        });
+
+        // In Auto Mode, we don't disconnect on tab switch (stay connected to product)
+        if (connectionMode === 'auto') {
+            console.log('[IDELayout] Auto mode - no tab switching logic');
+            return;
+        }
+
+        // In Manual Mode, we connect on entry and disconnect on exit
+        const handleManualSerial = async () => {
+            if (activeTerminalId === 'serial' && isTerminalOpen) {
+                console.log('[IDELayout] On serial tab - checking connection state');
+                // Connect if we have a port but aren't connected OR if we just disconnected
+                if (selectedPort && !isConnecting && (!isConnected || justDisconnectedForTabSwitch.current)) {
+                    console.log('[IDELayout] Manual mode: Attempting to connect to port:', selectedPort);
+                    justDisconnectedForTabSwitch.current = false; // Reset flag
+                    try {
+                        await manualConnect();
+                        console.log('[IDELayout] Manual connect completed');
+                    } catch (err) {
+                        console.error('[IDELayout] Manual connect failed:', err);
+                    }
+                } else {
+                    console.log('[IDELayout] Not connecting:', { isConnected, selectedPort, isConnecting });
+                }
+            } else {
+                console.log('[IDELayout] Not on serial tab - checking if should disconnect');
+                // Leaving serial tab in manual mode -> Disconnect
+                if (isConnected) {
+                    console.log('[IDELayout] Manual mode: Disconnecting on tab switch');
+                    justDisconnectedForTabSwitch.current = true; // Mark that we disconnected
+                    try {
+                        await manualDisconnect();
+                        console.log('[IDELayout] Manual disconnect completed');
+                    } catch (err) {
+                        console.error('[IDELayout] Manual disconnect failed:', err);
+                    }
+                }
+            }
+        };
+
+        handleManualSerial();
+    }, [activeTerminalId, isTerminalOpen, isConnected, isConnecting, selectedPort, manualConnect, manualDisconnect, connectionMode]);
 
     const [elements, setElements] = useState<UIElement[]>([
         { id: '1', type: 'rect', x: 100, y: 100, width: 375, height: 812, style: { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '40px' }, name: 'iPhone 13 Frame' },
@@ -108,12 +168,15 @@ const IDELayout: React.FC = () => {
     ]);
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
-    const [selectedDeviceSerial, setSelectedDeviceSerial] = useState<string>(connectedDevice?.usbSerial || '');
+    const selectedDeviceSerial = connectedDevice?.usbSerial || '';
     const [serialInput, setSerialInput] = useState('');
     const [terminalInput, setTerminalInput] = useState('');
 
+    // Track if we just disconnected for tab switching (to force reconnection)
+    const justDisconnectedForTabSwitch = React.useRef(false);
+
     // Unsaved changes tracking
-    const [isDirty, setIsDirty] = useState(false);
+    // const [isDirty, setIsDirty] = useState(false); // Derived from code !== savedCode
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const isLoadingFile = React.useRef(false);
 
@@ -143,12 +206,7 @@ const IDELayout: React.FC = () => {
         }
     }, [projectId]);
 
-    // Update selected device when connected device changes
-    React.useEffect(() => {
-        if (connectedDevice && !selectedDeviceSerial) {
-            setSelectedDeviceSerial(connectedDevice.usbSerial);
-        }
-    }, [connectedDevice, selectedDeviceSerial]);
+    // Sync selectedDeviceSerial with connectedDevice (removed useEffect as it's now derived)
 
     // Sync project root with backend
     React.useEffect(() => {
@@ -218,13 +276,18 @@ const IDELayout: React.FC = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [currentFilePath, code]); // Need code in deps to save latest version
 
-    // Track code changes for dirty state
-    React.useEffect(() => {
-        if (!isLoadingFile.current && currentFilePath) {
-            setIsDirty(code !== savedCode);
-        } else {
-            setIsDirty(false);
-        }
+    // Track code changes for dirty state - DERIVED NOW
+    // React.useEffect(() => {
+    //     if (!isLoadingFile.current && currentFilePath) {
+    //         setIsDirty(code !== savedCode);
+    //     } else {
+    //         setIsDirty(false);
+    //     }
+    // }, [code, savedCode, currentFilePath]);
+
+    const isDirty = React.useMemo(() => {
+        if (isLoadingFile.current || !currentFilePath) return false;
+        return code !== savedCode;
     }, [code, savedCode, currentFilePath]);
 
     // Clear save status after a delay
@@ -272,7 +335,11 @@ const IDELayout: React.FC = () => {
                 });
                 setActiveProjectId(newProject.id);
                 setActiveTab('files'); // Switch to files view to see the example
-                setIsDirty(false); // New project, no unsaved changes
+                // setIsDirty(false); // New project, no unsaved changes -> handled by savedCode update?
+                // For new project from example, we should set savedCode to the new code
+                // But here we don't have the code content easily accessible unless we fetch it or the API returns it.
+                // The API returns 'project', but does it return file content?
+                // If not, loadFile will handle it when activeProjectId changes.
             }
         } catch (error) {
             console.error('Failed to open example:', error);
@@ -310,7 +377,7 @@ const IDELayout: React.FC = () => {
                 // Update projects list
                 setProjects(prev => [...prev, newProject]);
                 setActiveProjectId(newProject.id);
-                setIsDirty(false);
+                // setIsDirty(false);
                 setSaveStatus('saved');
             } else {
                 setSaveStatus('error');
@@ -356,7 +423,8 @@ const IDELayout: React.FC = () => {
                 setCode(data.content);
                 setSavedCode(data.content);
                 setCurrentFilePath(filePath);
-                setIsDirty(false);
+                setSavedCode(data.content);
+                // setIsDirty(false);
             }
         } catch (error) {
             console.error('Failed to read file:', error);
@@ -384,7 +452,7 @@ const IDELayout: React.FC = () => {
                 throw new Error(data.error);
             }
             setSavedCode(code);
-            setIsDirty(false);
+            // setIsDirty(false);
             setSaveStatus('saved');
         } catch (error) {
             console.error('Failed to save file:', error);
@@ -396,8 +464,9 @@ const IDELayout: React.FC = () => {
     };
 
     const handleUpload = async () => {
-        if (!selectedDeviceSerial) {
-            alert('Please select a device first.');
+        const canFlash = connectionMode === 'manual' ? !!selectedPort : !!connectedDevice;
+        if (!canFlash) {
+            alert('Please select a device or port first.');
             return;
         }
 
@@ -412,7 +481,8 @@ const IDELayout: React.FC = () => {
         // Let's switch to a terminal tab for flashing
         setActiveTerminalId('1');
 
-        const result = await flashCode(code, selectedDeviceSerial, projectRoot || undefined, currentFilePath || undefined, activeProject?.readOnly);
+        const flashIdentifier = connectionMode === 'manual' ? undefined : connectedDevice?.usbSerial;
+        const result = await flashCode(code, flashIdentifier, projectRoot || undefined, currentFilePath || undefined, activeProject?.readOnly);
         if (!result.success) {
             alert(`Upload failed: ${result.error}`);
         }
@@ -472,7 +542,7 @@ const IDELayout: React.FC = () => {
 
         if (activeProjectId === id) {
             setActiveProjectId(newOpenProjects[newOpenProjects.length - 1].id);
-            setIsDirty(false);
+            // setIsDirty(false);
         }
     };
 
@@ -547,20 +617,50 @@ const IDELayout: React.FC = () => {
                     )}
                     {!isDesignMode && (
                         <>
-                            <select
-                                className="device-selector"
-                                value={selectedDeviceSerial}
-                                onChange={(e) => setSelectedDeviceSerial(e.target.value)}
-                                style={{ cursor: 'pointer', marginRight: '12px' }}
+                            <button
+                                className="device-selector-btn"
+                                onClick={() => setIsBoardSelectorOpen(true)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '6px 14px',
+                                    backgroundColor: '#f3f4f6',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '10px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    marginRight: '12px'
+                                }}
                             >
-                                <option value="" disabled>Select Device</option>
-                                {devices.map(device => (
-                                    <option key={device.usbSerial} value={device.usbSerial}>
-                                        {device.deviceName} ({device.usbSerial})
-                                    </option>
-                                ))}
-                                {devices.length === 0 && <option value="" disabled>No devices found</option>}
-                            </select>
+                                <div style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '6px',
+                                    backgroundColor: isConnected ? '#f0fdfa' : '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    {connectionMode === 'manual' ? (
+                                        <Cpu size={16} color={isConnected ? '#0d9488' : '#6b7280'} />
+                                    ) : (
+                                        <Usb size={16} color={isConnected ? '#0d9488' : '#6b7280'} />
+                                    )}
+                                </div>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', lineHeight: 1 }}>
+                                        {connectionMode === 'manual'
+                                            ? (selectedBoard?.name || 'Select Board')
+                                            : (connectedDevice?.deviceName || 'No Device')}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px', fontFamily: 'monospace' }}>
+                                        {connectionMode === 'manual'
+                                            ? (selectedPort || 'No Port')
+                                            : (connectedDevice?.portPath || 'Auto-Detect')}
+                                    </div>
+                                </div>
+                            </button>
                             <button
                                 className="icon-btn"
                                 onClick={() => setIsArduinoManagerOpen(true)}
@@ -573,7 +673,7 @@ const IDELayout: React.FC = () => {
                             <button
                                 className="play-btn"
                                 onClick={handleUpload}
-                                disabled={isFlashing || !selectedDeviceSerial}
+                                disabled={isFlashing || (!selectedDeviceSerial && !selectedPort)}
                                 style={{
                                     backgroundColor: isFlashing ? '#9ca3af' : '#3b82f6',
                                     color: 'white',
@@ -583,7 +683,7 @@ const IDELayout: React.FC = () => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    cursor: isFlashing || !selectedDeviceSerial ? 'not-allowed' : 'pointer',
+                                    cursor: isFlashing || (!selectedDeviceSerial && !selectedPort) ? 'not-allowed' : 'pointer',
                                     fontWeight: 500,
                                     transition: 'all 0.2s'
                                 }}
@@ -701,7 +801,13 @@ const IDELayout: React.FC = () => {
                             <PanelGroup direction="vertical">
                                 <Panel className="editor-panel">
                                     {currentFilePath ? (
-                                        <CodeEditor ref={editorRef} code={code} onChange={setCode} readOnly={activeProject?.readOnly} />
+                                        <CodeEditor
+                                            key={currentFilePath || 'empty'}
+                                            ref={editorRef}
+                                            code={code}
+                                            onChange={setCode}
+                                            readOnly={activeProject?.readOnly}
+                                        />
                                     ) : (
                                         <div className="editor-empty-state">
                                             <div className="empty-state-content">
@@ -887,8 +993,188 @@ const IDELayout: React.FC = () => {
                     }}
                 />
             )}
+
+            <BoardPortSelectorModal
+                isOpen={isBoardSelectorOpen}
+                onClose={() => setIsBoardSelectorOpen(false)}
+                onSelect={async (board, port, isProduct) => {
+                    console.log('[IDELayout] Board selector: selected', { board: board?.name, port, isProduct });
+
+                    // Disconnect from current device first
+                    if (isConnected) {
+                        console.log('[IDELayout] Disconnecting from current device');
+                        await manualDisconnect();
+                    }
+
+                    // Determine mode based on device type
+                    const newMode = isProduct ? 'auto' : 'manual';
+                    console.log('[IDELayout] Setting connection mode to:', newMode);
+
+                    // Update state FIRST
+                    setConnectionMode(newMode);
+                    setSelectedBoard(board);
+                    setSelectedPort(port);
+
+                    // Connect directly to the new port/device
+                    if (port) {
+                        // Create device object with the selected port
+                        const deviceObj: any = { portPath: port };
+
+                        // If it's a product, add device name for UI display
+                        if (isProduct) {
+                            deviceObj.deviceName = 'IA Kit Pro';
+                        }
+
+                        console.log('[IDELayout] Connecting to:', deviceObj);
+
+                        try {
+                            await connectToDevice(deviceObj);
+                        } catch (err) {
+                            console.error('[IDELayout] Connection error:', err);
+                        }
+                    }
+                }}
+                initialBoard={selectedBoard}
+                initialPort={selectedPort}
+            />
+
+            {/* Device Picker Modal for Multiple Products */}
+            {showDevicePicker && (
+                <div style={modalStyles.overlay}>
+                    <div style={modalStyles.container}>
+                        <div style={modalStyles.header}>
+                            <Usb size={24} color="#2563eb" />
+                            <h2 style={modalStyles.title}>Multiple Devices Detected</h2>
+                        </div>
+                        <p style={modalStyles.text}>Please select which IA Kit Pro you would like to connect to:</p>
+                        <div style={modalStyles.list}>
+                            {devices.map(device => (
+                                <button
+                                    key={device.usbSerial}
+                                    onClick={() => {
+                                        setConnectionMode('auto');
+                                        connectToDevice(device);
+                                        setShowDevicePicker(false);
+                                    }}
+                                    style={modalStyles.item}
+                                >
+                                    <div style={modalStyles.itemIcon}>
+                                        <Usb size={20} color="#2563eb" />
+                                    </div>
+                                    <div style={modalStyles.itemText}>
+                                        <div style={modalStyles.itemName}>{device.deviceName}</div>
+                                        <div style={modalStyles.itemSub}>{device.portPath} ({device.usbSerial})</div>
+                                    </div>
+                                    <ChevronRight size={18} color="#d1d5db" />
+                                </button>
+                            ))}
+                        </div>
+                        <div style={modalStyles.footer}>
+                            <button
+                                onClick={() => setShowDevicePicker(false)}
+                                style={modalStyles.cancelBtn}
+                            >
+                                DECIDE LATER
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
+};
+
+const modalStyles: { [key: string]: React.CSSProperties } = {
+    overlay: {
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000,
+    },
+    container: {
+        backgroundColor: '#fff',
+        borderRadius: '16px',
+        width: '450px',
+        padding: '32px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+    },
+    header: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+    },
+    title: {
+        fontSize: '20px',
+        fontWeight: 700,
+        color: '#111827',
+        margin: 0,
+    },
+    text: {
+        fontSize: '14px',
+        color: '#4b5563',
+        margin: 0,
+        lineHeight: 1.5,
+    },
+    list: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+    },
+    item: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '12px 16px',
+        backgroundColor: '#f9fafb',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        textAlign: 'left',
+    },
+    itemIcon: {
+        width: '40px',
+        height: '40px',
+        borderRadius: '8px',
+        backgroundColor: '#eff6ff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    itemText: {
+        flex: 1,
+    },
+    itemName: {
+        fontSize: '14px',
+        fontWeight: 600,
+        color: '#111827',
+    },
+    itemSub: {
+        fontSize: '11px',
+        color: '#6b7280',
+        fontFamily: 'monospace',
+    },
+    footer: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        marginTop: '12px',
+    },
+    cancelBtn: {
+        padding: '8px 16px',
+        fontSize: '13px',
+        fontWeight: 600,
+        color: '#6b7280',
+        backgroundColor: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+    }
 };
 
 export default IDELayout;

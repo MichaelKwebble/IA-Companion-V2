@@ -29,16 +29,11 @@ dist-ssr
 
 # Exclude ALL board managers and libraries (including ESP32)
 # Developers will download the ESP32 board manager through the app's Boards Manager
-arduino/data/packages/*
-arduino/user/libraries/*
-arduino/downloads/*
-arduino/data/tmp/*
+arduino/data/**
+arduino/user/**
+arduino/downloads/**
+arduino/config/arduino-cli.yaml
 
-# Keep Arduino index files (needed for package/library updates)
-!arduino/data/*.json
-!arduino/data/*.json.sig
-!arduino/data/*.yaml
-
-# Keep config directory structure
-!arduino/config/
+# Keep empty directories if needed, but the app creates them.
+# We can just ignore the contents.
 

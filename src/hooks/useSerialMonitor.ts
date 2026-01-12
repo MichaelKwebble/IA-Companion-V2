@@ -7,6 +7,7 @@ interface SerialMessage {
     data?: string | string[];
     status?: 'connected' | 'disconnected' | 'compiling' | 'uploading' | 'success' | 'error' | 'starting' | 'running' | 'done';
     device?: ESP32Device;
+    port?: string;
     error?: string;
     message?: string;
     progress?: number;
@@ -187,7 +188,7 @@ export function useSerialMonitor() {
             const response = await fetch('http://localhost:3001/api/serial/connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device })
+                body: JSON.stringify(device)
             });
 
             const result = await response.json();
@@ -248,7 +249,9 @@ export function useSerialMonitor() {
                         setConnectedDevice(null);
                     }
                     if (message.status === 'connected') {
-                        setSerialData(prev => [...prev, `> Connected to ${message.device?.usbSerial}`]);
+                        const deviceName = message.device?.deviceName || message.port || message.device?.usbSerial || 'Device';
+                        // Append connection message instead of clearing
+                        setSerialData(prev => [...prev, `> Connected to ${deviceName}`]);
                     } else {
                         setSerialData(prev => [...prev, '> Disconnected']);
                     }

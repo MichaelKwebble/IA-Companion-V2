@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Folder } from 'lucide-react';
 import './NewProjectModal.css';
 
@@ -10,7 +10,27 @@ interface NewProjectModalProps {
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onCreate }) => {
     const [projectName, setProjectName] = useState('');
-    const [location, setLocation] = useState('/Users/michaelcheng/Desktop/Projects');
+    const [location, setLocation] = useState('');
+
+    useEffect(() => {
+        const fetchDesktopPath = async () => {
+            // @ts-ignore
+            if (window.electron && window.electron.project && window.electron.project.getDesktopPath) {
+                try {
+                    // @ts-ignore
+                    const path = await window.electron.project.getDesktopPath();
+                    if (path) setLocation(path);
+                } catch (e) {
+                    console.error('Failed to get desktop path', e);
+                }
+            }
+        };
+
+        if (isOpen) {
+            fetchDesktopPath();
+        }
+    }, [isOpen]);
+
     const [enableAI, setEnableAI] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);

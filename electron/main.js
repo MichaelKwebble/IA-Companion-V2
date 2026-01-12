@@ -58,6 +58,7 @@ class LibraryUpdater {
     async checkForUpdates() {
         try {
             const response = await fetch(this.updateUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const localVersion = await this.getLocalVersion();
             return {
@@ -66,8 +67,8 @@ class LibraryUpdater {
                 downloadUrl: data.downloadUrl
             };
         } catch (error) {
-            console.error('[LibraryUpdater] Check failed:', error);
-            throw error;
+            console.error('[LibraryUpdater] Check failed:', error.message);
+            return { available: false, error: error.message };
         }
     }
 
@@ -260,6 +261,10 @@ ipcMain.handle('dialog:openDirectory', async () => {
     } else {
         return filePaths[0];
     }
+});
+
+ipcMain.handle('project:getDesktopPath', () => {
+    return app.getPath('desktop');
 });
 
 app.whenReady().then(() => {

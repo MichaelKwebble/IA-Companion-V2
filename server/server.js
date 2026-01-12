@@ -456,20 +456,22 @@ async function findSerialPortPath(usbSerial, options = {}) {
         }
 
         // Try to find by serial number
-        const port = ports.find(p => p.serialNumber === usbSerial);
+        const port = usbSerial ? ports.find(p => p.serialNumber === usbSerial) : null;
         if (port) {
             return port.path;
         }
 
-        // Fallback: find by manufacturer (Espressif)
-        const espPort = ports.find(p =>
-            p.manufacturer && p.manufacturer.toLowerCase().includes('espressif')
-        );
-        if (espPort) {
-            if (log) {
-                console.log('[Serial] Found Espressif port:', espPort.path);
+        // Fallback: find by manufacturer (Espressif) - ONLY if usbSerial was provided but not found
+        if (usbSerial) {
+            const espPort = ports.find(p =>
+                p.manufacturer && p.manufacturer.toLowerCase().includes('espressif')
+            );
+            if (espPort) {
+                if (log) {
+                    console.log('[Serial] Found Espressif port:', espPort.path);
+                }
+                return espPort.path;
             }
-            return espPort.path;
         }
 
         return null;
@@ -526,9 +528,17 @@ async function detectDevices() {
  * Connect to serial port
  */
 async function connectToSerial(device) {
-    const portPath = await findSerialPortPath(device.usbSerial);
+    if (!device || (!device.portPath && !device.usbSerial)) {
+        return { success: false, error: 'No device info provided (need portPath or usbSerial)' };
+    }
+
+    let portPath = device.portPath;
+    if (!portPath && device.usbSerial) {
+        portPath = await findSerialPortPath(device.usbSerial);
+    }
+
     if (!portPath) {
-        return { success: false, error: 'Port not found' };
+        return { success: false, error: 'Port not found (could not resolve port path)' };
     }
 
     // Acquire lock for MANUAL connection
@@ -751,6 +761,16 @@ app.get('/api/devices', async (req, res) => {
     }
 });
 
+app.get('/api/serial/ports', async (req, res) => {
+    try {
+        const ports = await SerialPort.list();
+        res.json({ success: true, ports });
+    } catch (error) {
+        console.error('[API Error] Failed to list ports:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 
 // API endpoint to delete a project
 app.delete('/api/projects/:id', async (req, res) => {
@@ -784,14 +804,7 @@ app.delete('/api/projects/:id', async (req, res) => {
 // API endpoint to connect to a device
 app.post('/api/serial/connect', async (req, res) => {
     try {
-        const { device } = req.body;
-        if (!device || !device.usbSerial) {
-            return res.status(400).json({
-                success: false,
-                error: 'Device information is required'
-            });
-        }
-
+        const device = req.body;
         const result = await connectToSerial(device);
         res.json(result);
     } catch (error) {
@@ -832,6 +845,16 @@ app.get('/api/arduino/boards/search', async (req, res) => {
         const { stdout } = await runArduinoCLI(args);
         res.json({ success: true, data: JSON.parse(stdout) });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/boards/listall', async (req, res) => {
+    try {
+        const { stdout } = await runArduinoCLI(['board', 'listall', '--format', 'json']);
+        res.json({ success: true, data: JSON.parse(stdout) });
+    } catch (error) {
+        console.error('[Arduino] Board listall failed:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1258,9 +1281,9 @@ app.post('/api/serial/disconnect', async (req, res) => {
 
 // API endpoint to flash code
 app.post('/api/flash', async (req, res) => {
-    const { code, usbSerial, projectRoot, currentFilePath, isReadOnly } = req.body;
-    console.log(`[Flash] Request: usbSerial=${usbSerial}, projectRoot=${projectRoot}, isReadOnly=${isReadOnly}`);
-    if (!code || !usbSerial) return res.status(400).json({ success: false, error: 'Missing args' });
+    const { code, usbSerial, projectRoot, currentFilePath, isReadOnly, portPath: bodyPortPath } = req.body;
+    console.log(`[Flash] Request: usbSerial=${usbSerial}, portPath=${bodyPortPath}, projectRoot=${projectRoot}, isReadOnly=${isReadOnly}`);
+    if (!code || (!usbSerial && !bodyPortPath)) return res.status(400).json({ success: false, error: 'Missing args (code and either usbSerial or portPath required)' });
 
     // 1. Acquire FLASHING lock (this will preempt MANUAL connection)
     const acquired = await portManager.acquire('FLASHING');
@@ -1382,7 +1405,10 @@ app.post('/api/flash', async (req, res) => {
     };
 
     try {
-        const portPath = await findSerialPortPath(usbSerial);
+        let portPath = bodyPortPath;
+        if (!portPath && usbSerial) {
+            portPath = await findSerialPortPath(usbSerial);
+        }
         if (!portPath) throw new Error('Port not found');
 
         console.log(`[Flash] Starting flash on ${portPath}`);
@@ -1421,19 +1447,23 @@ app.post('/api/flash', async (req, res) => {
         await fs.writeFile(path.join(tempDir, `${sketchName}.ino`), code);
 
         // 3. Compile
-        const fqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default,UploadSpeed=115200';
+        const defaultFqbn = 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,UploadMode=default,UploadSpeed=115200';
+        const targetFqbn = req.body.fqbn || defaultFqbn;
+        const isCustomBoard = !!req.body.fqbn;
+
         const libPath = path.join(APP_ROOT, 'IA_firmware', 'arduino-libraries');
 
         const compileArgs = [
             'compile',
             '--clean',
             '--config-file', ARDUINO_YAML_PATH,
-            '--fqbn', fqbn,
+            '--fqbn', targetFqbn,
             '--verbose'
         ];
 
         // Only include product firmware libraries if not in read-only (example) mode
-        if (!isReadOnly) {
+        // AND it's the product's FQBN (even if manually selected)
+        if (!isReadOnly && targetFqbn === defaultFqbn) {
             compileArgs.push('--libraries', libPath);
         }
 
@@ -1452,7 +1482,8 @@ app.post('/api/flash', async (req, res) => {
         broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compilation successful', progress: 40 });
 
         // 4. Upload with Retries
-        const uploadCmd = `arduino-cli upload -p ${normalizePortPath(portPath)} --fqbn ${fqbn} "${tempDir}"`;
+        const finalPortPath = req.body.portPath || portPath;
+        const uploadCmd = `arduino-cli upload -p ${normalizePortPath(finalPortPath)} --fqbn ${targetFqbn} "${tempDir}"`;
 
         let uploadSuccess = false;
         let lastError = null;
@@ -1472,8 +1503,8 @@ app.post('/api/flash', async (req, res) => {
                 await runCommandWithProgress('arduino-cli', [
                     'upload',
                     '--config-file', ARDUINO_YAML_PATH,
-                    '-p', normalizePortPath(portPath),
-                    '--fqbn', fqbn,
+                    '-p', normalizePortPath(finalPortPath),
+                    '--fqbn', targetFqbn,
                     tempDir
                 ], { startProgress: 40, endProgress: 100, stage: 'Uploading', status: 'uploading', message: 'Uploading...' });
 

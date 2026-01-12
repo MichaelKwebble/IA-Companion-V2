@@ -7,7 +7,8 @@ contextBridge.exposeInMainWorld('electron', {
         getVersion: () => ipcRenderer.invoke('library:get-version')
     },
     project: {
-        selectDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
+        selectDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+        getDesktopPath: () => ipcRenderer.invoke('project:getDesktopPath')
     }
 });
 

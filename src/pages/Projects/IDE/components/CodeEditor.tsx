@@ -12,7 +12,7 @@ export interface CodeEditorHandle {
     redo: () => void;
 }
 
-const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange, readOnly = false }, ref) => {
+const CodeEditor = React.memo(forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange, readOnly = false }, ref) => {
     const editorRef = useRef<any>(null);
 
     useImperativeHandle(ref, () => ({
@@ -31,6 +31,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
     const handleEditorDidMount: OnMount = (editor) => {
         editorRef.current = editor;
     };
+
+    // Removed useEffect that syncs code prop to editor value to prevent cursor jumps.
+    // We rely on defaultValue + key prop (in parent) to handle file switching.
 
     const handleDrop = (e: React.DragEvent) => {
         if (readOnly) return;
@@ -111,9 +114,17 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
             <Editor
                 height="100%"
                 language="cpp"
-                value={code}
+                // Use defaultValue for initial load, and handle updates manually to avoid cursor jumps
+                defaultValue={code}
+                onMount={(editor, monaco) => {
+                    handleEditorDidMount(editor, monaco);
+                    // Update editor content when code prop changes externally
+                    // We need to check if the content is actually different to avoid cursor reset
+                    if (editor.getValue() !== code) {
+                        editor.setValue(code);
+                    }
+                }}
                 onChange={(value) => !readOnly && onChange(value || '')}
-                onMount={handleEditorDidMount}
                 theme="vs-light"
                 options={{
                     minimap: { enabled: false },
@@ -132,6 +143,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChan
             />
         </div>
     );
-});
+}));
 
 export default CodeEditor;
