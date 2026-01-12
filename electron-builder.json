@@ -1,0 +1,25 @@
+{
+    "appId": "com.ia.companion",
+    "productName": "IA",
+    "directories": {
+        "output": "dist_electron"
+    },
+    "files": [
+        "dist/**/*",
+        "electron/**/*",
+        "server/**/*",
+        "bin/**/*",
+        "package.json"
+    ],
+    "mac": {
+        "target": "dmg",
+        "icon": "build/icon.png",
+        "identity": null
+    },
+    "asarUnpack": [
+        "server/**/*",
+        "bin/**/*",
+        "node_modules/serialport/**/*",
+        "node_modules/@serialport/**/*"
+    ]
+}

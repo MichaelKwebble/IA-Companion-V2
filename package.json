@@ -2,7 +2,6 @@
   "name": "ia-companion-v2",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "main": "electron/main.js",
   "engines": {
     "node": ">=20.12.0"
@@ -10,11 +9,12 @@
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite\"",
     "server": "cd server && npm start",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && VITE_APP_MODE=production vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:prod-sim": "concurrently \"VITE_APP_MODE=production vite\" \"wait-on http://localhost:5173 && VITE_APP_MODE=production electron .\""
+    "electron:prod-sim": "concurrently \"VITE_APP_MODE=production vite\" \"wait-on http://localhost:5173 && VITE_APP_MODE=production electron .\"",
+    "electron:build": "npm run build && node build-helper.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -30,7 +30,14 @@
     "react-blockly": "^9.0.0",
     "react-dom": "^19.2.0",
     "react-resizable-panels": "^3.0.6",
-    "react-router-dom": "^7.9.6"
+    "react-router-dom": "^7.9.6",
+    "electron-is-dev": "^3.0.1",
+    "express": "^4.22.1",
+    "cors": "^2.8.5",
+    "serialport": "^12.0.0",
+    "ws": "^8.16.0",
+    "multer": "^2.0.2",
+    "yocto-queue": "^0.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -40,7 +47,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.1.0",
     "electron": "^39.2.7",
-    "electron-is-dev": "^3.0.1",
+    "electron-builder": "^26.4.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -55,5 +62,6 @@
       "react": "$react",
       "react-dom": "$react-dom"
     }
-  }
+  },
+  "type": "module"
 }

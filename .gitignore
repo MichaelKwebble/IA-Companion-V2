@@ -1,39 +1,49 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production / Builds
+dist/
+dist_electron/
+build/
+*.dmg
+*.zip
+*.tar.gz
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
 # Logs
-logs
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+logs/
+*.log
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# ============================================
-# Arduino directories - exclude most content
-# ============================================
-
-# Exclude ALL board managers and libraries (including ESP32)
-# Developers will download the ESP32 board manager through the app's Boards Manager
-arduino/data/**
-arduino/user/**
-arduino/downloads/**
+# Arduino Data (Large directories)
+arduino/data/
+arduino/downloads/
+arduino/user/
 arduino/config/arduino-cli.yaml
 
-# Keep empty directories if needed, but the app creates them.
-# We can just ignore the contents.
+# Local Data
+projects.json
+IA_firmware/
 
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript
+*.tsbuildinfo

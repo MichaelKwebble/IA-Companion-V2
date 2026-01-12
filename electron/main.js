@@ -288,12 +288,33 @@ app.whenReady().then(async () => {
     // Start server in production or simulation
     if (!isDev || process.env.VITE_APP_MODE === 'production') {
         const { fork } = await import('child_process');
-        const serverProcess = fork(SERVER_PATH, [], {
-            env: { ...process.env }
+
+        // In production, the server is unpacked from asar
+        const serverPath = app.isPackaged
+            ? path.join(process.resourcesPath, 'app.asar.unpacked/server/server.js')
+            : SERVER_PATH;
+
+        console.log('[Main] Starting server from:', serverPath);
+
+        const serverProcess = fork(serverPath, [], {
+            env: { ...process.env },
+            stdio: ['inherit', 'pipe', 'pipe', 'ipc']
+        });
+
+        serverProcess.stdout.on('data', (data) => {
+            console.log(`[Server] ${data.toString().trim()}`);
+        });
+
+        serverProcess.stderr.on('data', (data) => {
+            console.error(`[Server Error] ${data.toString().trim()}`);
         });
 
         serverProcess.on('error', (err) => {
-            console.error('Failed to start server:', err);
+            console.error('[Main] Failed to start server:', err);
+        });
+
+        serverProcess.on('exit', (code) => {
+            console.log(`[Main] Server process exited with code ${code}`);
         });
 
         // Kill server when app quits

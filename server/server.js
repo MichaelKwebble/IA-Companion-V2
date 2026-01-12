@@ -16,6 +16,11 @@ import AdmZip from 'adm-zip';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Bundled binary path
+const BUNDLED_BIN_PATH = process.env.NODE_ENV === 'production'
+    ? path.join(process.resourcesPath, 'bin')
+    : path.join(__dirname, '..', 'bin');
+
 const execAsync = promisify(exec);
 const app = express();
 const PORT = 3001;
@@ -53,6 +58,7 @@ function sanitizePath(p) {
 // Common environment for all arduino-cli calls - use standard arduino-cli env keys
 const ARDUINO_ENV = {
     ...process.env,
+    PATH: `${BUNDLED_BIN_PATH}${path.delimiter}${process.env.PATH}${os.platform() === 'darwin' ? ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' : ''}`,
     ARDUINO_DIRECTORIES_DATA: sanitizePath(ARDUINO_DATA_DIR),
     ARDUINO_DIRECTORIES_USER: sanitizePath(ARDUINO_USER_DIR),
     ARDUINO_DIRECTORIES_DOWNLOADS: sanitizePath(ARDUINO_DOWNLOADS_DIR)
@@ -114,7 +120,16 @@ async function runArduinoCLI(args, options = {}) {
 }
 
 // Initialize on startup
-initArduinoDirs().catch(err => console.error('[Arduino] Init failed:', err));
+initArduinoDirs()
+    .then(async () => {
+        try {
+            const { stdout } = await execAsync('which arduino-cli', { env: ARDUINO_ENV });
+            console.log(`[Arduino] Found arduino-cli at: ${stdout.trim()}`);
+        } catch (e) {
+            console.error('[Arduino] arduino-cli NOT found in PATH. Please ensure it is installed.');
+        }
+    })
+    .catch(err => console.error('[Arduino] Init failed:', err));
 
 
 // Helper to load projects
@@ -532,22 +547,31 @@ async function detectDevices() {
  * Connect to serial port
  */
 async function connectToSerial(device) {
+    if (isConnecting) {
+        console.warn('[Serial] Connection already in progress, rejecting new request');
+        return { success: false, error: 'Connection already in progress' };
+    }
+
     if (!device || (!device.portPath && !device.usbSerial)) {
         return { success: false, error: 'No device info provided (need portPath or usbSerial)' };
     }
 
     let portPath = device.portPath;
     if (!portPath && device.usbSerial) {
+        console.log(`[Serial] Resolving port path for serial: ${device.usbSerial}`);
         portPath = await findSerialPortPath(device.usbSerial);
     }
 
     if (!portPath) {
+        console.error(`[Serial] Could not find port path for device:`, device);
         return { success: false, error: 'Port not found (could not resolve port path)' };
     }
 
     // Acquire lock for MANUAL connection
+    console.log(`[Serial] Attempting to acquire lock for ${portPath}...`);
     const acquired = await portManager.acquire('MANUAL', portPath);
     if (!acquired) {
+        console.warn(`[Serial] Port busy, could not acquire lock for ${portPath}`);
         return { success: false, error: `Port busy (Owner: ${portManager.getOwner()})` };
     }
 
@@ -812,10 +836,11 @@ app.post('/api/serial/connect', async (req, res) => {
         const result = await connectToSerial(device);
         res.json(result);
     } catch (error) {
-        console.error('[API Error]', error);
+        console.error('[API Error] /api/serial/connect:', error);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
         });
     }
 });
@@ -827,6 +852,7 @@ app.post('/api/arduino/boards/update-index', async (req, res) => {
         await runArduinoCLI(['core', 'update-index']);
         res.json({ success: true });
     } catch (error) {
+        console.error('[API Error] /api/arduino/boards/list:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -850,6 +876,16 @@ app.get('/api/arduino/boards/search', async (req, res) => {
         res.json({ success: true, data: JSON.parse(stdout) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/arduino/firmware/status', async (req, res) => {
+    try {
+        const firmwarePath = path.join(APP_ROOT, 'IA_firmware');
+        const stats = await fs.stat(firmwarePath);
+        res.json({ success: true, exists: stats.isDirectory() });
+    } catch (error) {
+        res.json({ success: true, exists: false });
     }
 });
 

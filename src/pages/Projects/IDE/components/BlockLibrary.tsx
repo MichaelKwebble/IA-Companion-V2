@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
-import { GitBranch, Repeat, Code, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { GitBranch, Repeat, Code, Layers, Cpu } from 'lucide-react';
 import './BlockLibrary.css';
 
-type BlockCategory = 'logic' | 'loops' | 'math' | 'custom';
+type BlockCategory = 'logic' | 'loops' | 'math' | 'custom' | 'ia-firmware';
 
 const BlockLibrary: React.FC = () => {
     const [activeCategory, setActiveCategory] = useState<BlockCategory>('logic');
+    const [hasFirmware, setHasFirmware] = useState(false);
+
+    useEffect(() => {
+        const checkFirmware = async () => {
+            try {
+                const response = await fetch('http://localhost:3001/api/arduino/firmware/status');
+                const data = await response.json();
+                if (data.success && data.exists) {
+                    setHasFirmware(true);
+                }
+            } catch (error) {
+                console.error('Failed to check firmware status:', error);
+            }
+        };
+        checkFirmware();
+    }, []);
 
     const handleDragStart = (e: React.DragEvent, snippet: string) => {
         e.dataTransfer.setData('application/x-code-snippet', snippet);
@@ -39,6 +55,15 @@ const BlockLibrary: React.FC = () => {
                         <div className="block-item math-block" draggable onDragStart={(e) => handleDragStart(e, '(a + b)')}>Arithmetic (+)</div>
                         <div className="block-item math-block" draggable onDragStart={(e) => handleDragStart(e, 'random(1, 100)')}>Random (1 to 100)</div>
                         <div className="block-item math-block" draggable onDragStart={(e) => handleDragStart(e, 'map(value, fromLow, fromHigh, toLow, toHigh)')}>Map Range</div>
+                    </div>
+                );
+            case 'ia-firmware':
+                return (
+                    <div className="block-list">
+                        <div className="block-item ia-block" draggable onDragStart={(e) => handleDragStart(e, 'incipe.getLightIntensity();')}>Get Light Intensity</div>
+                        <div className="block-item ia-block" draggable onDragStart={(e) => handleDragStart(e, 'incipe.getPPM();')}>Get PPM</div>
+                        <div className="block-item ia-block" draggable onDragStart={(e) => handleDragStart(e, 'incipe.getDistance();')}>Get Distance</div>
+                        <div className="block-item ia-block" draggable onDragStart={(e) => handleDragStart(e, 'incipe.onscreen("#position", "thing to show");')}>On Screen Display</div>
                     </div>
                 );
             case 'custom':
@@ -78,6 +103,15 @@ const BlockLibrary: React.FC = () => {
                 >
                     <Code size={20} />
                 </button>
+                {hasFirmware && (
+                    <button
+                        className={`lib-tab ${activeCategory === 'ia-firmware' ? 'active' : ''}`}
+                        onClick={() => setActiveCategory('ia-firmware')}
+                        title="IA Firmware"
+                    >
+                        <Cpu size={20} />
+                    </button>
+                )}
                 <button
                     className={`lib-tab ${activeCategory === 'custom' ? 'active' : ''}`}
                     onClick={() => setActiveCategory('custom')}
@@ -87,7 +121,7 @@ const BlockLibrary: React.FC = () => {
                 </button>
             </div>
             <div className="library-content">
-                <div className="category-title">{activeCategory.toUpperCase()}</div>
+                <div className="category-title">{activeCategory === 'ia-firmware' ? 'IA FIRMWARE' : activeCategory.toUpperCase()}</div>
                 {renderBlocks()}
             </div>
         </div>
