@@ -84,9 +84,11 @@ const ProjectDashboard: React.FC = () => {
                     <button className="btn-primary flex items-center gap-sm" onClick={() => handleCreateProject('code')}>
                         <Plus size={16} /> New Code Project
                     </button>
-                    <button className="btn-secondary flex items-center gap-sm" onClick={() => handleCreateProject('design')}>
-                        <PenTool size={16} /> New Design Project
-                    </button>
+                    {import.meta.env.VITE_APP_MODE !== 'production' && (
+                        <button className="btn-secondary flex items-center gap-sm" onClick={() => handleCreateProject('design')}>
+                            <PenTool size={16} /> New Design Project
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus, BookOpen, Cpu, Usb, ChevronRight } from 'lucide-react';
+import { Folder, FileCode, Box, MessageSquare, Terminal, Layers, Layout, Save, Undo, Redo, Play, Plus, Library, Cpu, Usb, ChevronRight } from 'lucide-react';
 import './IDELayout.css';
 import FileExplorer from './components/FileExplorer';
 import CodeEditor, { type CodeEditorHandle } from './components/CodeEditor';
@@ -43,8 +43,8 @@ const IDELayout: React.FC = () => {
         selectedBoard, selectedPort, setSelectedBoard, setSelectedPort,
         connectionMode, setConnectionMode,
         showDevicePicker, setShowDevicePicker,
-        connectionError,
-        manualConnect, manualDisconnect
+        manualConnect,
+        manualDisconnect
     } = useDevice();
 
     const { projectId } = useParams();
@@ -522,7 +522,7 @@ const IDELayout: React.FC = () => {
         }
 
         setActiveProjectId(id);
-        setIsDirty(false);
+        // setIsDirty(false); // isDirty is derived, no need to set manually
     };
 
     const handleCloseProject = (id: string) => {
@@ -754,17 +754,19 @@ const IDELayout: React.FC = () => {
                                     </button>
                                 </>
                             )}
-                            <button
-                                className={`panel-tab ${activeTab === 'ai' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('ai')}
-                            >
-                                <MessageSquare size={16} /> AI
-                            </button>
+                            {import.meta.env.VITE_APP_MODE !== 'production' && (
+                                <button
+                                    className={`panel-tab ${activeTab === 'ai' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('ai')}
+                                >
+                                    <MessageSquare size={16} /> AI
+                                </button>
+                            )}
                             <button
                                 className={`panel-tab ${activeTab === 'examples' ? 'active' : ''}`}
                                 onClick={() => setActiveTab('examples')}
                             >
-                                <BookOpen size={16} /> Examples
+                                <Library size={16} strokeWidth={2.5} /> Examples
                             </button>
                         </div>
 

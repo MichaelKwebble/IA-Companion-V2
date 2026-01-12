@@ -14,7 +14,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<MainLayout />}>
-            <Route index element={<Home />} />
+            <Route index element={import.meta.env.VITE_APP_MODE === 'production' ? <Navigate to="/projects" replace /> : <Home />} />
             <Route path="projects">
               <Route index element={<ProjectDashboard />} />
               <Route path=":projectId" element={<IDELayout />} />

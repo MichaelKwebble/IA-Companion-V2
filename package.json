@@ -13,7 +13,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\""
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:prod-sim": "concurrently \"VITE_APP_MODE=production vite\" \"wait-on http://localhost:5173 && VITE_APP_MODE=production electron .\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

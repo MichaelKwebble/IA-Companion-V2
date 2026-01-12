@@ -9,20 +9,26 @@ const Sidebar: React.FC = () => {
       <div className="logo-container">
         <div className="logo-icon">IA</div>
       </div>
-      
+
       <nav className="nav-menu">
-        <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Home">
-          <Home size={20} />
-        </NavLink>
+        {import.meta.env.VITE_APP_MODE !== 'production' && (
+          <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Home">
+            <Home size={20} />
+          </NavLink>
+        )}
         <NavLink to="/projects" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Projects">
           <FolderCode size={20} />
         </NavLink>
-        <NavLink to="/lectures" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Lectures">
-          <BookOpen size={20} />
-        </NavLink>
-        <NavLink to="/community" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Community">
-          <Users size={20} />
-        </NavLink>
+        {import.meta.env.VITE_APP_MODE !== 'production' && (
+          <>
+            <NavLink to="/lectures" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Lectures">
+              <BookOpen size={20} />
+            </NavLink>
+            <NavLink to="/community" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Community">
+              <Users size={20} />
+            </NavLink>
+          </>
+        )}
       </nav>
 
       <div className="bottom-menu">

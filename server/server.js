@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 const execAsync = promisify(exec);
 const app = express();
 const PORT = 3001;
-const APP_ROOT = path.join(__dirname, '..');
+const APP_ROOT = process.env.USER_DATA_PATH || path.join(__dirname, '..');
 const PROJECTS_FILE = path.join(APP_ROOT, 'projects.json');
 const ARDUINO_ROOT = path.join(APP_ROOT, 'arduino');
 const ARDUINO_CONFIG_DIR = path.join(ARDUINO_ROOT, 'config');
@@ -120,10 +120,14 @@ initArduinoDirs().catch(err => console.error('[Arduino] Init failed:', err));
 // Helper to load projects
 async function loadProjects() {
     try {
+        console.log(`[Server] Loading projects from: ${PROJECTS_FILE}`);
         const data = await fs.readFile(PROJECTS_FILE, 'utf-8');
         return JSON.parse(data);
     } catch (e) {
         // Default projects if file doesn't exist
+        if (process.env.NODE_ENV === 'production') {
+            return [];
+        }
         return [
             { id: '1', name: 'Blink LED', type: 'code', path: path.join(os.homedir(), 'Desktop', 'Blink_LED'), lastModified: '2 mins ago' },
             { id: '2', name: 'Smart Home UI', type: 'design', lastModified: '1 hour ago' },
@@ -148,7 +152,7 @@ async function deleteProjectDirectory(projectPath) {
     }
 }
 
-let currentProjectRoot = APP_ROOT;
+let currentProjectRoot = process.env.USER_DATA_PATH || path.join(__dirname, '..');
 
 // Create HTTP server
 const server = http.createServer(app);

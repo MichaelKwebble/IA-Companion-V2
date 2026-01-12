@@ -208,6 +208,12 @@
     transition: all 0.2s ease;
 }
 
+.panel-tab svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
 .panel-tab:hover {
     color: var(--color-text-primary);
     background-color: var(--color-bg-hover);

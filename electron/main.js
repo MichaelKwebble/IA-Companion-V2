@@ -11,6 +11,20 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Define server path
+const SERVER_PATH = path.join(__dirname, '../server/server.js');
+
+// Set up environment for production
+// Set up environment for production or production simulation
+if (!isDev || process.env.VITE_APP_MODE === 'production') {
+    process.env.USER_DATA_PATH = app.getPath('userData');
+    process.env.NODE_ENV = 'production';
+    console.log('[Main] Running in PRODUCTION mode');
+    console.log('[Main] User Data Path:', process.env.USER_DATA_PATH);
+} else {
+    console.log('[Main] Running in DEVELOPMENT mode');
+}
+
 function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
@@ -36,7 +50,9 @@ function createWindow() {
 class LibraryUpdater {
     constructor() {
         this.updateUrl = 'https://ia-mainboard-pat.vercel.app/api/myproduct-latest';
-        this.baseDir = path.join(app.getAppPath(), 'IA_firmware');
+        // Use USER_DATA_PATH if set (Prod), otherwise AppPath (Dev)
+        const rootDir = process.env.USER_DATA_PATH || app.getAppPath();
+        this.baseDir = path.join(rootDir, 'IA_firmware');
         this.libDir = path.join(this.baseDir, 'arduino-libraries');
         this.incipeDir = path.join(this.libDir, 'incipe');
         this.versionFile = path.join(this.baseDir, 'version.json');
@@ -267,7 +283,25 @@ ipcMain.handle('project:getDesktopPath', () => {
     return app.getPath('desktop');
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Start server in production
+    // Start server in production or simulation
+    if (!isDev || process.env.VITE_APP_MODE === 'production') {
+        const { fork } = await import('child_process');
+        const serverProcess = fork(SERVER_PATH, [], {
+            env: { ...process.env }
+        });
+
+        serverProcess.on('error', (err) => {
+            console.error('Failed to start server:', err);
+        });
+
+        // Kill server when app quits
+        app.on('will-quit', () => {
+            serverProcess.kill();
+        });
+    }
+
     createWindow();
 
     app.on('activate', () => {
