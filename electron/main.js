@@ -11,6 +11,9 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Set app name explicitly for correct userData path
+app.setName('IA');
+
 // Define server path
 const SERVER_PATH = path.join(__dirname, '../server/server.js');
 

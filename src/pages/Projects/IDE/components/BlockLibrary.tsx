@@ -20,7 +20,12 @@ const BlockLibrary: React.FC = () => {
                 console.error('Failed to check firmware status:', error);
             }
         };
+
         checkFirmware();
+
+        // Listen for real-time updates from other components
+        window.addEventListener('firmware-updated', checkFirmware);
+        return () => window.removeEventListener('firmware-updated', checkFirmware);
     }, []);
 
     const handleDragStart = (e: React.DragEvent, snippet: string) => {

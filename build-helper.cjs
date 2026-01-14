@@ -14,8 +14,7 @@ console.log('Temporarily removed "type": "module" from package.json');
 
 try {
     console.log('Running electron-builder...');
-    // Use the environment variable to skip signing if needed
-    const buildCommand = 'CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.json';
+    const buildCommand = 'electron-builder --config electron-builder.json';
     execSync(buildCommand, { stdio: 'inherit' });
 } catch (error) {
     console.error('Build failed:', error);

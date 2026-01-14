@@ -102,11 +102,11 @@ network:
     try {
         const currentContent = await fs.readFile(ARDUINO_YAML_PATH, 'utf-8');
         if (currentContent === yamlContent) {
-            // console.log(`[Arduino] Config at ${ARDUINO_YAML_PATH} is up to date.`);
+            console.log(`[Arduino] Config at ${ARDUINO_YAML_PATH} is up to date`);
             return;
         }
     } catch (e) {
-        // File doesn't exist, proceed to write
+        // File doesn't exist or other error, proceed to write
     }
 
     await fs.writeFile(ARDUINO_YAML_PATH, yamlContent, 'utf-8');

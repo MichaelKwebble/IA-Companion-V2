@@ -44,6 +44,8 @@ const UpdateLibraryButton: React.FC = () => {
             if (result.success) {
                 setStatus('success');
                 setVersion(result.version);
+                // Notify other components that firmware has been updated
+                window.dispatchEvent(new CustomEvent('firmware-updated'));
                 setTimeout(() => setStatus('idle'), 3000);
             } else {
                 setStatus('error');

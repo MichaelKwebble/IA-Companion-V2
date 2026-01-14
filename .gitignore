@@ -9,7 +9,6 @@ coverage/
 # Production / Builds
 dist/
 dist_electron/
-build/
 *.dmg
 *.zip
 *.tar.gz
