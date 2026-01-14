@@ -17,9 +17,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Bundled binary path
+const IS_WIN = os.platform() === 'win32';
+const ARDUINO_BIN_NAME = IS_WIN ? 'arduino-cli.exe' : 'arduino-cli';
 const BUNDLED_BIN_PATH = process.env.NODE_ENV === 'production'
     ? path.join(process.resourcesPath, 'bin')
     : path.join(__dirname, '..', 'bin');
+const BUNDLED_BIN_FILE = path.join(BUNDLED_BIN_PATH, ARDUINO_BIN_NAME);
 
 const execAsync = promisify(exec);
 const app = express();
@@ -108,11 +111,11 @@ async function runArduinoCLI(args, options = {}) {
     console.log(`[Arduino CLI] Running: arduino-cli ${allArgs.join(' ')}`);
 
     if (options.spawn) {
-        return spawn('arduino-cli', allArgs, { ...options, env: ARDUINO_ENV });
+        return spawn(ARDUINO_BIN_NAME, allArgs, { ...options, env: ARDUINO_ENV });
     }
 
     // Increase maxBuffer to 100MB for large search results (e.g. lib search)
-    return execAsync(`arduino-cli ${allArgs.map(a => `"${a}"`).join(' ')}`, {
+    return execAsync(`"${ARDUINO_BIN_NAME}" ${allArgs.map(a => `"${a}"`).join(' ')}`, {
         ...options,
         maxBuffer: 100 * 1024 * 1024,
         env: ARDUINO_ENV
@@ -123,10 +126,18 @@ async function runArduinoCLI(args, options = {}) {
 initArduinoDirs()
     .then(async () => {
         try {
-            const { stdout } = await execAsync('which arduino-cli', { env: ARDUINO_ENV });
-            console.log(`[Arduino] Found arduino-cli at: ${stdout.trim()}`);
+            // Check if bundled binary exists and is executable
+            try {
+                await fs.access(BUNDLED_BIN_FILE, fs.constants.X_OK);
+                console.log(`[Arduino] Found bundled binary at: ${BUNDLED_BIN_FILE}`);
+            } catch (e) {
+                // If not in bin/, check PATH
+                const cmd = IS_WIN ? 'where' : 'which';
+                const { stdout } = await execAsync(`${cmd} ${ARDUINO_BIN_NAME}`, { env: ARDUINO_ENV });
+                console.log(`[Arduino] Found ${ARDUINO_BIN_NAME} in PATH at: ${stdout.trim().split('\n')[0]}`);
+            }
         } catch (e) {
-            console.error('[Arduino] arduino-cli NOT found in PATH. Please ensure it is installed.');
+            console.error(`[Arduino] ${ARDUINO_BIN_NAME} NOT found. Please ensure it is installed in /bin or system PATH.`);
         }
     })
     .catch(err => console.error('[Arduino] Init failed:', err));
