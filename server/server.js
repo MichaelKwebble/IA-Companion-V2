@@ -83,8 +83,7 @@ async function initArduinoDirs() {
         await fs.mkdir(dir, { recursive: true });
     }
 
-    // Always regenerate arduino-cli.yaml to ensure correct absolute paths for the current user
-    // We sanitize paths to use forward slashes, which works on both Windows and Mac and avoids YAML escape issues
+    // Only regenerate arduino-cli.yaml if content differs to avoid triggering restart loops
     const yamlContent = `
 directories:
   data: "${sanitizePath(ARDUINO_DATA_DIR)}"
@@ -98,8 +97,19 @@ board_manager:
 
 network:
   connection_timeout: 10m0s
-`;
-    await fs.writeFile(ARDUINO_YAML_PATH, yamlContent.trim(), 'utf-8');
+`.trim();
+
+    try {
+        const currentContent = await fs.readFile(ARDUINO_YAML_PATH, 'utf-8');
+        if (currentContent === yamlContent) {
+            // console.log(`[Arduino] Config at ${ARDUINO_YAML_PATH} is up to date.`);
+            return;
+        }
+    } catch (e) {
+        // File doesn't exist, proceed to write
+    }
+
+    await fs.writeFile(ARDUINO_YAML_PATH, yamlContent, 'utf-8');
     console.log(`[Arduino] Updated config at ${ARDUINO_YAML_PATH}`);
 }
 

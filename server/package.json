@@ -5,7 +5,7 @@
     "main": "server.js",
     "type": "module",
     "scripts": {
-        "start": "node --watch-path=server.js server.js"
+        "start": "node --watch-path=./server.js server.js"
     },
     "dependencies": {
         "adm-zip": "^0.5.16",
