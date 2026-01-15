@@ -20,10 +20,32 @@
         "entitlementsInherit": "build/entitlements.mac.plist",
         "category": "public.app-category.developer-tools"
     },
+    "win": {
+        "target": [
+            {
+                "target": "nsis",
+                "arch": [
+                    "x64"
+                ]
+            },
+            {
+                "target": "portable",
+                "arch": [
+                    "x64"
+                ]
+            }
+        ],
+        "icon": "build/icon.png",
+        "forceCodeSigning": false
+    },
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "createDesktopShortcut": true,
+        "runAfterFinish": true
+    },
     "asarUnpack": [
         "server/**/*",
-        "bin/**/*",
-        "node_modules/serialport/**/*",
-        "node_modules/@serialport/**/*"
+        "bin/**/*"
     ]
 }

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
+import { logToFile } from './logger.js';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
@@ -13,6 +14,18 @@ const __dirname = path.dirname(__filename);
 
 // Set app name explicitly for correct userData path
 app.setName('IA');
+
+process.on('uncaughtException', (error) => {
+    console.error('[Main] Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[Main] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+app.on('quit', (event, exitCode) => {
+    console.log('[Main] App is quitting with exit code:', exitCode);
+});
 
 // Define server path
 const SERVER_PATH = path.join(__dirname, '../server/server.js');
@@ -32,6 +45,7 @@ function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
         height: 800,
+        show: false, // Don't show until ready
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -39,13 +53,24 @@ function createWindow() {
         },
     });
 
-    const startUrl = isDev
+    const isSimulation = process.env.VITE_APP_MODE === 'production' && !app.isPackaged;
+
+    // In dev or simulation (if not packaged), use the dev server
+    const useDevServer = isDev || (isSimulation && !app.isPackaged);
+
+    const startUrl = useDevServer
         ? 'http://localhost:5173'
         : `file://${path.join(__dirname, '../dist/index.html')}`;
 
-    win.loadURL(startUrl);
+    win.loadURL(startUrl).catch(err => {
+        console.error('[Main] Failed to load URL:', err);
+    });
 
-    if (isDev) {
+    win.once('ready-to-show', () => {
+        win.show();
+    });
+
+    if (isDev || isSimulation) {
         win.webContents.openDevTools();
     }
 }
@@ -290,40 +315,55 @@ app.whenReady().then(async () => {
     // Start server in production
     // Start server in production or simulation
     if (!isDev || process.env.VITE_APP_MODE === 'production') {
-        const { fork } = await import('child_process');
+        try {
+            const { fork } = await import('child_process');
 
-        // In production, the server is unpacked from asar
-        const serverPath = app.isPackaged
-            ? path.join(process.resourcesPath, 'app.asar.unpacked/server/server.js')
-            : SERVER_PATH;
+            // In production, the server is unpacked from asar
+            const serverPath = app.isPackaged
+                ? path.join(process.resourcesPath, 'app.asar.unpacked/server/server.js')
+                : SERVER_PATH;
 
-        console.log('[Main] Starting server from:', serverPath);
+            logToFile(`[Main] Starting server from: ${serverPath}`);
 
-        const serverProcess = fork(serverPath, [], {
-            env: { ...process.env },
-            stdio: ['inherit', 'pipe', 'pipe', 'ipc']
-        });
+            const serverProcess = fork(serverPath, [], {
+                env: {
+                    ...process.env,
+                    RESOURCES_PATH: process.resourcesPath
+                },
+                stdio: ['inherit', 'pipe', 'pipe', 'ipc']
+            });
 
-        serverProcess.stdout.on('data', (data) => {
-            console.log(`[Server] ${data.toString().trim()}`);
-        });
+            serverProcess.stdout.on('data', (data) => {
+                const text = data.toString().trim();
+                if (text) {
+                    console.log(`[Server] ${text}`);
+                    logToFile(`[Server] ${text}`);
+                }
+            });
 
-        serverProcess.stderr.on('data', (data) => {
-            console.error(`[Server Error] ${data.toString().trim()}`);
-        });
+            serverProcess.stderr.on('data', (data) => {
+                const text = data.toString().trim();
+                if (text) {
+                    console.error(`[Server Error] ${text}`);
+                    logToFile(`[Server Error] ${text}`);
+                }
+            });
 
-        serverProcess.on('error', (err) => {
-            console.error('[Main] Failed to start server:', err);
-        });
+            serverProcess.on('error', (err) => {
+                logToFile(`[Main] Server process error: ${err.message}`);
+            });
 
-        serverProcess.on('exit', (code) => {
-            console.log(`[Main] Server process exited with code ${code}`);
-        });
+            serverProcess.on('exit', (code) => {
+                logToFile(`[Main] Server process exited with code ${code}`);
+            });
 
-        // Kill server when app quits
-        app.on('will-quit', () => {
-            serverProcess.kill();
-        });
+            // Kill server when app quits
+            app.on('will-quit', () => {
+                serverProcess.kill();
+            });
+        } catch (error) {
+            console.error('[Main] Error starting server process:', error);
+        }
     }
 
     createWindow();

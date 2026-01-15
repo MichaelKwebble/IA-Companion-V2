@@ -19,10 +19,31 @@ const __dirname = path.dirname(__filename);
 // Bundled binary path
 const IS_WIN = os.platform() === 'win32';
 const ARDUINO_BIN_NAME = IS_WIN ? 'arduino-cli.exe' : 'arduino-cli';
-const BUNDLED_BIN_PATH = process.env.NODE_ENV === 'production'
-    ? path.join(process.resourcesPath, 'bin')
-    : path.join(__dirname, '..', 'bin');
-const BUNDLED_BIN_FILE = path.join(BUNDLED_BIN_PATH, ARDUINO_BIN_NAME);
+
+/**
+ * Robust binary path resolver that checks standard and unpacked locations
+ */
+async function getBundledBinFile() {
+    const possiblePaths = [
+        // Standard production path (relative to server.js in resources/app.asar.unpacked/server/)
+        path.join(__dirname, '..', 'bin', ARDUINO_BIN_NAME),
+        // Direct resources path if passed via env
+        process.env.RESOURCES_PATH ? path.join(process.env.RESOURCES_PATH, 'bin', ARDUINO_BIN_NAME) : null,
+        process.env.RESOURCES_PATH ? path.join(process.env.RESOURCES_PATH, 'app.asar.unpacked', 'bin', ARDUINO_BIN_NAME) : null,
+        // Fallback for dev
+        path.join(__dirname, '..', '..', 'bin', ARDUINO_BIN_NAME)
+    ].filter(p => p !== null);
+
+    for (const p of possiblePaths) {
+        try {
+            await fs.access(p, fs.constants.X_OK);
+            return p;
+        } catch (e) {
+            // Check next path
+        }
+    }
+    return null;
+}
 
 const execAsync = promisify(exec);
 const app = express();
@@ -61,11 +82,14 @@ function sanitizePath(p) {
 // Common environment for all arduino-cli calls - use standard arduino-cli env keys
 const ARDUINO_ENV = {
     ...process.env,
-    PATH: `${BUNDLED_BIN_PATH}${path.delimiter}${process.env.PATH}${os.platform() === 'darwin' ? ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' : ''}`,
     ARDUINO_DIRECTORIES_DATA: sanitizePath(ARDUINO_DATA_DIR),
     ARDUINO_DIRECTORIES_USER: sanitizePath(ARDUINO_USER_DIR),
     ARDUINO_DIRECTORIES_DOWNLOADS: sanitizePath(ARDUINO_DOWNLOADS_DIR)
 };
+
+// We will update PATH once we find the binary
+let BUNDLED_BIN_PATH = '';
+let BUNDLED_BIN_FILE = '';
 
 // Ensure Arduino directories exist
 async function initArduinoDirs() {
@@ -136,18 +160,20 @@ async function runArduinoCLI(args, options = {}) {
 initArduinoDirs()
     .then(async () => {
         try {
-            // Check if bundled binary exists and is executable
-            try {
-                await fs.access(BUNDLED_BIN_FILE, fs.constants.X_OK);
+            const binFile = await getBundledBinFile();
+            if (binFile) {
+                BUNDLED_BIN_FILE = binFile;
+                BUNDLED_BIN_PATH = path.dirname(binFile);
+                ARDUINO_ENV.PATH = `${BUNDLED_BIN_PATH}${path.delimiter}${process.env.PATH}${os.platform() === 'darwin' ? ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' : ''}`;
                 console.log(`[Arduino] Found bundled binary at: ${BUNDLED_BIN_FILE}`);
-            } catch (e) {
-                // If not in bin/, check PATH
+            } else {
+                // If not found in bundles, check system PATH
                 const cmd = IS_WIN ? 'where' : 'which';
                 const { stdout } = await execAsync(`${cmd} ${ARDUINO_BIN_NAME}`, { env: ARDUINO_ENV });
-                console.log(`[Arduino] Found ${ARDUINO_BIN_NAME} in PATH at: ${stdout.trim().split('\n')[0]}`);
+                console.log(`[Arduino] Found ${ARDUINO_BIN_NAME} in system PATH at: ${stdout.trim().split('\n')[0]}`);
             }
         } catch (e) {
-            console.error(`[Arduino] ${ARDUINO_BIN_NAME} NOT found. Please ensure it is installed in /bin or system PATH.`);
+            console.error(`[Arduino] ${ARDUINO_BIN_NAME} NOT found in bundles or system PATH.`);
         }
     })
     .catch(err => console.error('[Arduino] Init failed:', err));

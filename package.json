@@ -7,50 +7,51 @@
     "node": ">=20.12.0"
   },
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"vite\"",
+    "dev": "concurrently \"npm run server\" \"vite --port 5173 --strictPort\"",
     "server": "cd server && npm start",
-    "build": "tsc -b && VITE_APP_MODE=production vite build",
+    "build": "tsc -b && cross-env VITE_APP_MODE=production vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:prod-sim": "concurrently \"VITE_APP_MODE=production vite\" \"wait-on http://localhost:5173 && VITE_APP_MODE=production electron .\"",
-    "electron:build": "npm run build && node build-helper.cjs",
+    "electron:prod-sim": "concurrently \"cross-env VITE_APP_MODE=production vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && cross-env VITE_APP_MODE=production electron .\"",
+    "electron:build": "cd server && npm install --omit=dev && cd .. && npm run build && node build-helper.cjs",
     "postinstall": "cd server && npm install"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@monaco-editor/react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.1.1",
     "ace-builds": "^1.43.4",
     "adm-zip": "^0.5.16",
     "blockly": "^12.3.1",
     "clsx": "^2.1.1",
+    "concurrently": "^9.1.0",
+    "cors": "^2.8.5",
+    "electron-is-dev": "^3.0.1",
+    "express": "^4.22.1",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.554.0",
+    "multer": "^2.0.2",
     "react": "^19.2.0",
     "react-ace": "^14.0.1",
     "react-blockly": "^9.0.0",
     "react-dom": "^19.2.0",
     "react-resizable-panels": "^3.0.6",
     "react-router-dom": "^7.9.6",
-    "electron-is-dev": "^3.0.1",
-    "express": "^4.22.1",
-    "cors": "^2.8.5",
     "serialport": "^12.0.0",
-    "ws": "^8.16.0",
-    "multer": "^2.0.2",
-    "yocto-queue": "^0.1.0",
-    "concurrently": "^9.1.0",
     "vite": "^7.2.4",
     "wait-on": "^9.0.3",
-    "electron": "^39.2.7",
-    "@vitejs/plugin-react": "^5.1.1"
+    "ws": "^8.16.0",
+    "yocto-queue": "^0.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "electron-builder": "^26.4.0",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^24.13.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -63,6 +64,5 @@
       "react": "$react",
       "react-dom": "$react-dom"
     }
-  },
-  "type": "module"
+  }
 }
