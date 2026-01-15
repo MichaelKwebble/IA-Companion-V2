@@ -2,6 +2,8 @@
   "name": "ia-companion-v2",
   "private": true,
   "version": "0.0.0",
+  "description": "IA Companion Application",
+  "author": "Michael Kwebble",
   "main": "electron/main.js",
   "engines": {
     "node": ">=20.12.0"

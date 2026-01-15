@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, utilityProcess } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
@@ -316,24 +316,20 @@ app.whenReady().then(async () => {
     // Start server in production or simulation
     if (!isDev || process.env.VITE_APP_MODE === 'production') {
         try {
-            const { fork } = await import('child_process');
-
-            // In production, the server is unpacked from asar
-            const serverPath = app.isPackaged
-                ? path.join(process.resourcesPath, 'app.asar.unpacked/server/server.js')
-                : SERVER_PATH;
+            // In production, the server runs better inside ASAR using utilityProcess
+            const serverPath = path.join(__dirname, '../server/server.js');
 
             logToFile(`[Main] Starting server from: ${serverPath}`);
 
-            const serverProcess = fork(serverPath, [], {
+            const serverProcess = utilityProcess.fork(serverPath, [], {
                 env: {
                     ...process.env,
                     RESOURCES_PATH: process.resourcesPath
                 },
-                stdio: ['inherit', 'pipe', 'pipe', 'ipc']
+                stdio: 'pipe'
             });
 
-            serverProcess.stdout.on('data', (data) => {
+            serverProcess.stdout?.on('data', (data) => {
                 const text = data.toString().trim();
                 if (text) {
                     console.log(`[Server] ${text}`);

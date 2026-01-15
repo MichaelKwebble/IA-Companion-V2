@@ -45,7 +45,6 @@
         "runAfterFinish": true
     },
     "asarUnpack": [
-        "server/**/*",
         "bin/**/*"
     ]
 }
