@@ -16,6 +16,7 @@
    ```bash
    npm install
    ```
+   *Note: This will automatically install both the frontend and backend (server) dependencies.*
 
 3. **Run the development server**
    ```bash
@@ -108,7 +109,9 @@ If you encounter issues:
 1. Check the console for error messages
 2. Verify ESP32 board manager is installed
 3. Ensure all npm dependencies are up to date: `npm install`
-4. Ask the team for help with specific errors
+4. **Windows Users:** If `npm install` fails, you may need to install "Build Tools for Visual Studio" to compile native modules like `serialport`.
+5. **Mac Users:** Ensure you have Xcode Command Line Tools installed: `xcode-select --install`.
+6. Ask the team for help with specific errors.
 
 ---
 
