@@ -23,34 +23,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            setUser(user);
+        const unsubscribe = onAuthStateChanged(auth, async (authenticatedUser) => {
+            setUser(authenticatedUser);
 
-            if (user) {
-                // Check for admin status in Firestore
-                try {
-                    const userDoc = await getDoc(doc(db, 'users', user.uid));
-                    if (!userDoc.exists()) {
-                        // Initialize user doc if it doesn't exist
-                        await setDoc(doc(db, 'users', user.uid), {
-                            email: user.email,
-                            displayName: user.displayName,
-                            isAdmin: false,
-                            createdAt: new Date().toISOString(),
-                        });
+            // IF authenticated, start background sync but DON'T block the UI
+            if (authenticatedUser) {
+                // We set loading to false early so the user can enter the app immediately
+                setLoading(false);
+
+                // Background: Check/Create Firestore user profile and admin status
+                (async () => {
+                    try {
+                        const userRef = doc(db, 'users', authenticatedUser.uid);
+                        const userDoc = await getDoc(userRef);
+
+                        if (!userDoc.exists()) {
+                            await setDoc(userRef, {
+                                email: authenticatedUser.email,
+                                displayName: authenticatedUser.displayName,
+                                isAdmin: false,
+                                createdAt: new Date().toISOString(),
+                            });
+                            setIsAdmin(false);
+                        } else {
+                            setIsAdmin(userDoc.data()?.isAdmin || false);
+                        }
+                    } catch (error) {
+                        // Silently fail or log background errors - don't kick user out
+                        console.warn('Background profile sync failed:', error);
                         setIsAdmin(false);
-                    } else {
-                        setIsAdmin(userDoc.data()?.isAdmin || false);
                     }
-                } catch (error) {
-                    console.error('Error fetching user roles:', error);
-                    setIsAdmin(false);
-                }
+                })();
             } else {
                 setIsAdmin(false);
+                setLoading(false);
             }
-
-            setLoading(false);
         });
 
         return unsubscribe;
