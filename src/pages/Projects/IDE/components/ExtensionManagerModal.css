@@ -1,4 +1,4 @@
-.arduino-manager-overlay {
+.extension-manager-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -10,10 +10,10 @@
     align-items: center;
     justify-content: center;
     z-index: 2000;
-    animation: arduino-fadeIn 0.2s ease-out;
+    animation: extension-fadeIn 0.2s ease-out;
 }
 
-.arduino-manager-modal {
+.extension-manager-modal {
     width: var(--modal-width-default);
     max-width: var(--modal-max-width);
     height: var(--modal-height-default);
@@ -28,7 +28,7 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.arduino-modal-header {
+.extension-modal-header {
     padding: 16px 24px;
     display: flex;
     align-items: center;
@@ -37,24 +37,24 @@
     border-bottom: 1px solid #e2e8f0;
 }
 
-.arduino-header-left {
+.extension-header-left {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-.arduino-header-icon {
+.extension-header-icon {
     color: #3b82f6;
 }
 
-.arduino-modal-header h2 {
+.extension-modal-header h2 {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
     color: #1e293b;
 }
 
-.arduino-close-btn {
+.extension-close-btn {
     background: transparent;
     border: none;
     color: #64748b;
@@ -64,12 +64,12 @@
     transition: all 0.2s;
 }
 
-.arduino-close-btn:hover {
+.extension-close-btn:hover {
     background: #f1f5f9;
     color: #0f172a;
 }
 
-.arduino-modal-tabs {
+.extension-modal-tabs {
     display: flex;
     padding: 0 24px;
     background: #f8fafc;
@@ -77,7 +77,7 @@
     gap: 8px;
 }
 
-.arduino-modal-tab {
+.extension-modal-tab {
     padding: 12px 16px;
     background: transparent;
     border: none;
@@ -92,16 +92,16 @@
     transition: all 0.2s;
 }
 
-.arduino-modal-tab:hover {
+.extension-modal-tab:hover {
     color: #3b82f6;
 }
 
-.arduino-modal-tab.active {
+.extension-modal-tab.active {
     color: #3b82f6;
     border-bottom-color: #3b82f6;
 }
 
-.arduino-modal-content {
+.extension-modal-content {
     flex: 1;
     overflow: hidden;
     display: flex;
@@ -109,7 +109,7 @@
     width: 100%;
 }
 
-.arduino-console-panel {
+.extension-console-panel {
     position: absolute;
     bottom: 0;
     left: 0;
@@ -122,11 +122,11 @@
     flex-direction: column;
 }
 
-.arduino-console-panel.open {
+.extension-console-panel.open {
     height: 200px;
 }
 
-.arduino-console-header {
+.extension-console-header {
     height: 40px;
     padding: 0 24px;
     display: flex;
@@ -137,7 +137,7 @@
     user-select: none;
 }
 
-.arduino-console-title {
+.extension-console-title {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -146,7 +146,7 @@
     color: #94a3b8;
 }
 
-.arduino-console-output {
+.extension-console-output {
     flex: 1;
     padding: 12px 24px;
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -155,21 +155,21 @@
     background: #1e293b;
 }
 
-.arduino-log-line {
+.extension-log-line {
     margin-bottom: 4px;
     white-space: pre-wrap;
 }
 
-.arduino-log-line.error {
+.extension-log-line.error {
     color: #f87171;
 }
 
-.arduino-empty-logs {
+.extension-empty-logs {
     color: #475569;
     font-style: italic;
 }
 
-@keyframes arduino-fadeIn {
+@keyframes extension-fadeIn {
     from {
         opacity: 0;
     }

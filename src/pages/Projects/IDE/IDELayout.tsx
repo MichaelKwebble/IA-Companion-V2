@@ -14,7 +14,7 @@ import ComponentLibrary from './components/ComponentLibrary';
 import PropertiesPanel from './components/PropertiesPanel';
 import LessonToolbar from './components/LessonToolbar';
 import UpdateLibraryButton from './components/UpdateLibraryButton';
-import ArduinoManagerModal from './components/ArduinoManagerModal';
+import ExtensionManagerModal from './components/ExtensionManagerModal';
 import ExampleBrowser from './components/ExampleBrowser';
 import BoardPortSelectorModal from './components/BoardPortSelectorModal';
 import { useDevice } from '../../../context/DeviceContext';
@@ -103,7 +103,7 @@ const IDELayout: React.FC = () => {
     const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
     const [projectRoot, setProjectRoot] = useState<string | null>(null);
     const [isCreatingFile, setIsCreatingFile] = useState(false);
-    const [isArduinoManagerOpen, setIsArduinoManagerOpen] = useState(false);
+    const [isExtensionManagerOpen, setIsExtensionManagerOpen] = useState(false);
     const [isBoardSelectorOpen, setIsBoardSelectorOpen] = useState(false);
     const editorRef = React.useRef<CodeEditorHandle>(null);
 
@@ -692,8 +692,8 @@ const IDELayout: React.FC = () => {
                             </button>
                             <button
                                 className="icon-btn"
-                                onClick={() => setIsArduinoManagerOpen(true)}
-                                title="Arduino Boards & Library Manager"
+                                onClick={() => setIsExtensionManagerOpen(true)}
+                                title="Extension Manager"
                                 style={{ marginRight: '8px' }}
                             >
                                 <Box size={18} />
@@ -1014,13 +1014,13 @@ const IDELayout: React.FC = () => {
                 </PanelGroup>
             </div>
 
-            {/* Arduino Manager Modal */}
-            {isArduinoManagerOpen && (
-                <ArduinoManagerModal
-                    onClose={() => setIsArduinoManagerOpen(false)}
+            {/* Extension Manager Modal */}
+            {isExtensionManagerOpen && (
+                <ExtensionManagerModal
+                    onClose={() => setIsExtensionManagerOpen(false)}
                     onOpenExample={(lib, ex) => {
                         handleOpenExample(lib, ex);
-                        setIsArduinoManagerOpen(false);
+                        setIsExtensionManagerOpen(false);
                     }}
                 />
             )}

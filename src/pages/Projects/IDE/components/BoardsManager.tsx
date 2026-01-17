@@ -315,7 +315,7 @@ const BoardsManager: React.FC = () => {
                         </div>
                         <div className="arduino-settings-footer">
                             <button className="arduino-btn-danger-outline" onClick={async () => {
-                                if (confirm('Clear Arduino downloads cache? This will free up space but future installs may take longer.')) {
+                                if (confirm('Clear downloads cache? This will free up space but future installs may take longer.')) {
                                     await fetch('http://localhost:3001/api/arduino/cache/clear', { method: 'POST' });
                                     alert('Cache cleared');
                                 }
