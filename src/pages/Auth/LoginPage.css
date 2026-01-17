@@ -1,0 +1,255 @@
+.login-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    background-color: #f9fafb;
+    overflow: hidden;
+}
+
+.login-card {
+    flex: 1;
+    max-width: 500px;
+    padding: 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: white;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.02);
+    z-index: 10;
+}
+
+.login-header {
+    margin-bottom: 40px;
+}
+
+.login-header .logo-icon {
+    width: 48px;
+    height: 48px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 20px;
+    margin-bottom: 24px;
+}
+
+.login-header h1 {
+    font-size: 32px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 8px;
+}
+
+.login-header p {
+    color: #6b7280;
+    font-size: 16px;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-group label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper svg {
+    position: absolute;
+    left: 14px;
+    color: #9ca3af;
+}
+
+.input-wrapper input {
+    width: 100%;
+    padding: 12px 14px 12px 42px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.input-wrapper input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.submit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+}
+
+.submit-btn:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+}
+
+.submit-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.error-message {
+    color: #ef4444;
+    font-size: 13px;
+    background: #fef2f2;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #fee2e2;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 32px 0;
+    color: #9ca3af;
+    font-size: 13px;
+}
+
+.divider::before,
+.divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.divider span {
+    padding: 0 12px;
+}
+
+.social-auth {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 40px;
+}
+
+.social-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.social-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.login-footer {
+    text-align: center;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.login-footer button {
+    background: transparent;
+    border: none;
+    color: #3b82f6;
+    font-weight: 700;
+    margin-left: 6px;
+    cursor: pointer;
+}
+
+.login-visual {
+    flex: 1;
+    background: #eff6ff;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.visual-content {
+    text-align: center;
+    max-width: 400px;
+    z-index: 10;
+}
+
+.visual-content h2 {
+    font-size: 28px;
+    font-weight: 800;
+    color: #1e3a8a;
+    margin: 24px 0 16px;
+}
+
+.visual-content p {
+    color: #3b82f6;
+    line-height: 1.6;
+    font-size: 16px;
+}
+
+.visual-circles {
+    position: absolute;
+    inset: 0;
+}
+
+.circle {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.c1 {
+    width: 600px;
+    height: 600px;
+    top: -100px;
+    right: -100px;
+}
+
+.c2 {
+    width: 400px;
+    height: 400px;
+    bottom: -50px;
+    left: -50px;
+}
+
+.c3 {
+    width: 200px;
+    height: 200px;
+    top: 100px;
+    left: 100px;
+}
