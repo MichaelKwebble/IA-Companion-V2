@@ -11,6 +11,7 @@ const Sidebar: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isAdminOpen, setIsAdminOpen] = React.useState(false);
   const { user, isAdmin } = useAuth();
+  const isProduction = import.meta.env.VITE_APP_MODE === 'production';
 
   const navigate = useNavigate();
 
@@ -51,7 +52,9 @@ const Sidebar: React.FC = () => {
   }, [isAdmin, navigate]);
 
   const handleLogout = () => {
-    auth.signOut();
+    if (auth && typeof auth.signOut === 'function') {
+      auth.signOut();
+    }
   };
 
   return (
@@ -61,7 +64,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       <nav className="nav-menu">
-        {import.meta.env.VITE_APP_MODE !== 'production' && (
+        {!isProduction && (
           <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Home">
             <Home size={20} />
           </NavLink>
@@ -69,7 +72,7 @@ const Sidebar: React.FC = () => {
         <NavLink to="/projects" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Projects">
           <FolderCode size={20} />
         </NavLink>
-        {import.meta.env.VITE_APP_MODE !== 'production' && (
+        {!isProduction && (
           <>
             <NavLink to="/lectures" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Lectures">
               <BookOpen size={20} />
@@ -88,9 +91,11 @@ const Sidebar: React.FC = () => {
         <button className="nav-item" title="Settings">
           <Settings size={20} />
         </button>
-        <button className="nav-item logout-btn" title="Logout" onClick={handleLogout}>
-          <LogOut size={20} />
-        </button>
+        {!isProduction && (
+          <button className="nav-item logout-btn" title="Logout" onClick={handleLogout}>
+            <LogOut size={20} />
+          </button>
+        )}
         <div className="avatar-placeholder" title={user?.email || 'User'}>
           {user?.photoURL ? (
             <img src={user.photoURL} alt="Avatar" className="avatar-img" />

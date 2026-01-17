@@ -6,8 +6,14 @@ interface ProtectedRouteProps {
     children: React.ReactNode;
 }
 
+const isProduction = import.meta.env.VITE_APP_MODE === 'production';
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const { user, loading } = useAuth();
+
+    if (isProduction) {
+        return <>{children}</>;
+    }
 
     if (loading) {
         return (
