@@ -1684,22 +1684,20 @@ app.post('/api/flash/cancel', (req, res) => {
 });
 
 // API endpoint to list files
-app.get('/api/files', async (req, res) => {
-    const projectRoot = currentProjectRoot;
-
-    async function getFiles(dir) {
+async function getFiles(dir, root) {
+    try {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         const files = await Promise.all(entries.map(async (entry) => {
             const resPath = path.resolve(dir, entry.name);
-            const relPath = path.relative(projectRoot, resPath);
+            const relPath = path.relative(root, resPath);
 
-            // Skip node_modules, .git, dist, and IA_firmware
-            if (['node_modules', '.git', 'dist', 'IA_firmware'].includes(entry.name)) {
+            // Skip common build artifacts and hidden folders
+            if (['node_modules', '.git', 'dist', 'IA_firmware', 'build'].includes(entry.name) || entry.name.startsWith('.')) {
                 return null;
             }
 
             if (entry.isDirectory()) {
-                const children = await getFiles(resPath);
+                const children = await getFiles(resPath, root);
                 return {
                     id: relPath,
                     name: entry.name,
@@ -1710,28 +1708,81 @@ app.get('/api/files', async (req, res) => {
                 return {
                     id: relPath,
                     name: entry.name,
-                    type: 'file'
+                    type: 'file',
+                    fullPath: resPath // Include full path for global search
                 };
             }
         }));
         return files.filter(f => f !== null);
+    } catch (e) {
+        console.error(`[Server] Failed to read dir ${dir}:`, e.message);
+        return [];
     }
+}
 
+app.get('/api/files', async (req, res) => {
+    const projectRoot = currentProjectRoot;
     try {
-        const fileTree = await getFiles(projectRoot);
+        const fileTree = await getFiles(projectRoot, projectRoot);
         res.json({ success: true, files: fileTree });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// API endpoint to read a file
+app.get('/api/search/global', async (req, res) => {
+    try {
+        const projects = await loadProjects();
+        const allResults = [];
+
+        for (const project of projects) {
+            if (!project.path) continue;
+
+            const findInFiles = (items, proj) => {
+                let results = [];
+                items.forEach(item => {
+                    if (item.type === 'file') {
+                        results.push({
+                            id: item.id,
+                            name: item.name,
+                            path: item.id,
+                            fullPath: item.fullPath,
+                            projectName: proj.name,
+                            projectId: proj.id
+                        });
+                    }
+                    if (item.children) {
+                        results = results.concat(findInFiles(item.children, proj));
+                    }
+                });
+                return results;
+            };
+
+            const files = await getFiles(project.path, project.path);
+            allResults.push(...findInFiles(files, project));
+        }
+
+        res.json({ success: true, files: allResults });
+    } catch (error) {
+        console.error('[Global Search Error]', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.get('/api/files/read', async (req, res) => {
-    const { filePath } = req.query;
+    const { filePath, projectId } = req.query;
     if (!filePath) return res.status(400).json({ success: false, error: 'filePath is required' });
 
     try {
-        const fullPath = path.join(currentProjectRoot, filePath);
+        let root = currentProjectRoot;
+        if (projectId) {
+            const projects = await loadProjects();
+            const project = projects.find(p => p.id === projectId);
+            if (project && project.path) {
+                root = project.path;
+            }
+        }
+        const fullPath = path.isAbsolute(filePath) ? filePath : path.join(root, filePath);
         const content = await fs.readFile(fullPath, 'utf-8');
         res.json({ success: true, content });
     } catch (error) {

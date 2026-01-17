@@ -12,11 +12,14 @@ interface FileItem {
     name: string;
     type: 'file' | 'folder';
     path: string;
+    projectName?: string;
+    projectId?: string;
 }
 
 const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<FileItem[]>([]);
+    const [selectedIndex, setSelectedIndex] = useState(0);
     const [isAdminModeRequested, setIsAdminModeRequested] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -25,12 +28,14 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
             inputRef.current?.focus();
             setQuery('');
             setResults([]);
+            setSelectedIndex(0);
             setIsAdminModeRequested(false);
         }
     }, [isOpen]);
 
     const handleSearch = async (val: string) => {
         setQuery(val);
+        setSelectedIndex(0);
         if (val.toLowerCase() === 'adminmode') {
             setIsAdminModeRequested(true);
             return;
@@ -44,31 +49,14 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
         }
 
         try {
-            // In a real app, this might be a dedicated search API or a filtered file list
-            const response = await fetch('http://localhost:3001/api/files');
+            // Fetch from global search endpoint
+            const response = await fetch('http://localhost:3001/api/search/global');
             const data = await response.json();
             if (data.success) {
-                const allFiles: FileItem[] = [];
-                const flatten = (items: any[]) => {
-                    items.forEach(item => {
-                        if (item.type === 'file') {
-                            allFiles.push({
-                                id: item.id,
-                                name: item.name,
-                                type: 'file',
-                                path: item.id
-                            });
-                        }
-                        if (item.children) {
-                            flatten(item.children);
-                        }
-                    });
-                };
-                flatten(data.files);
-
-                const filtered = allFiles.filter(f =>
+                // Filter matches by name across all files in all projects
+                const filtered = data.files.filter((f: FileItem) =>
                     f.name.toLowerCase().includes(val.toLowerCase())
-                ).slice(0, 10);
+                ).slice(0, 50); // Show more results
                 setResults(filtered);
             }
         } catch (error) {
@@ -76,15 +64,38 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
         }
     };
 
+    const handleFileOpen = (file: FileItem) => {
+        console.log('[SearchOverlay] Dispatching open-file event for:', file.path, 'in project:', file.projectId);
+        window.dispatchEvent(new CustomEvent('open-file', {
+            detail: {
+                path: file.path,
+                projectId: file.projectId
+            }
+        }));
+        console.log('[SearchOverlay] Calling onClose');
+        onClose();
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
             onClose();
         }
-        if (e.key === 'Enter' && isAdminModeRequested) {
-            // Trigger admin mode - we'll handle this in IDELayout or a global way if needed
-            // For now, let's just log it or use an event
-            window.dispatchEvent(new CustomEvent('open-admin-mode'));
-            onClose();
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setSelectedIndex(prev => (prev + 1) % (results.length || 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setSelectedIndex(prev => (prev - 1 + (results.length || 1)) % (results.length || 1));
+        }
+
+        if (e.key === 'Enter') {
+            if (isAdminModeRequested) {
+                window.dispatchEvent(new CustomEvent('open-admin-mode'));
+                onClose();
+            } else if (results.length > 0) {
+                handleFileOpen(results[selectedIndex]);
+            }
         }
     };
 
@@ -122,15 +133,22 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
                         </div>
                     ) : (
                         results.length > 0 ? (
-                            results.map(file => (
-                                <div key={file.id} className="search-result-item" onClick={() => {
-                                    // Handle file selection - would need to navigate to project + file
-                                    console.log('Selected file:', file);
-                                    onClose();
-                                }}>
+                            results.map((file, index) => (
+                                <div
+                                    key={file.id}
+                                    className={`search-result-item ${index === selectedIndex ? 'selected' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        console.log('[SearchOverlay] Click on file:', file.name);
+                                        handleFileOpen(file);
+                                    }}
+                                >
                                     <File size={16} className="file-icon" />
                                     <div className="file-info">
-                                        <span className="file-name">{file.name}</span>
+                                        <div className="file-name-row">
+                                            <span className="file-name">{file.name}</span>
+                                            {file.projectName && <span className="project-tag">{file.projectName}</span>}
+                                        </div>
                                         <span className="file-path">{file.path}</span>
                                     </div>
                                 </div>

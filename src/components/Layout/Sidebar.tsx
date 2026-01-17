@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { FolderCode, BookOpen, Users, Settings, Home, Search, LogOut } from 'lucide-react';
 import SearchOverlay from '../Search/SearchOverlay';
 import AdminManager from '../Admin/AdminManager';
@@ -12,6 +12,8 @@ const Sidebar: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = React.useState(false);
   const { user, isAdmin } = useAuth();
 
+  const navigate = useNavigate();
+
   React.useEffect(() => {
     const handleOpenAdmin = () => {
       if (isAdmin) {
@@ -20,9 +22,33 @@ const Sidebar: React.FC = () => {
         alert('Access Denied: You do not have administrator privileges.');
       }
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Open search on "/" if not in an input/textarea
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    const handleOpenFile = (e: any) => {
+      console.log('[Sidebar] Received open-file event:', e.detail);
+      if (e.detail && e.detail.path) {
+        const projectId = e.detail.projectId || '1';
+        // Navigate to the correct project with file query param
+        navigate(`/projects/${projectId}?openFile=${encodeURIComponent(e.detail.path)}`);
+      }
+    };
+
     window.addEventListener('open-admin-mode', handleOpenAdmin);
-    return () => window.removeEventListener('open-admin-mode', handleOpenAdmin);
-  }, [isAdmin]);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('open-file', handleOpenFile);
+    return () => {
+      window.removeEventListener('open-admin-mode', handleOpenAdmin);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-file', handleOpenFile);
+    };
+  }, [isAdmin, navigate]);
 
   const handleLogout = () => {
     auth.signOut();
@@ -56,7 +82,7 @@ const Sidebar: React.FC = () => {
       </nav>
 
       <div className="bottom-menu">
-        <button className="nav-item" title="Search" onClick={() => setIsSearchOpen(true)}>
+        <button className="nav-item" title="Search /" onClick={() => setIsSearchOpen(true)}>
           <Search size={20} />
         </button>
         <button className="nav-item" title="Settings">

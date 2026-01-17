@@ -264,6 +264,54 @@ const IDELayout: React.FC = () => {
         syncRoot();
     }, [activeProjectId, projects]);
 
+    const handleFileSelect = React.useCallback(async (filePath: string) => {
+        console.log('[IDELayout] handleFileSelect called for:', filePath);
+        try {
+            isLoadingFile.current = true;
+            const response = await fetch(`http://localhost:3001/api/files/read?filePath=${encodeURIComponent(filePath)}&projectId=${projectId || ''}`);
+            const data = await response.json();
+            if (data.success) {
+                console.log('[IDELayout] File read success:', filePath);
+                setCode(data.content);
+                setSavedCode(data.content);
+                setCurrentFilePath(filePath);
+            } else {
+                console.error('[IDELayout] File read failed:', data.error);
+                alert(`Failed to open file: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('[IDELayout] Failed to read file error:', error);
+            alert('Failed to open file');
+        } finally {
+            isLoadingFile.current = false;
+        }
+    }, [setCode, setSavedCode, setCurrentFilePath]);
+
+    // Handle open-file event from Spotlight Search
+    React.useEffect(() => {
+        const handleOpenFile = (e: any) => {
+            console.log('[IDELayout] Received open-file event:', e.detail);
+            if (e.detail && e.detail.path) {
+                handleFileSelect(e.detail.path);
+            }
+        };
+        window.addEventListener('open-file', handleOpenFile);
+        return () => window.removeEventListener('open-file', handleOpenFile);
+    }, [handleFileSelect]);
+
+    // Handle openFile query param from Spotlight Search navigation
+    React.useEffect(() => {
+        const openFilePath = searchParams.get('openFile');
+        if (openFilePath) {
+            console.log('[IDELayout] Opening file from query param:', openFilePath);
+            handleFileSelect(openFilePath);
+            // Clear the query param after opening to prevent re-opening on refresh
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('openFile');
+            navigate(`/projects/${projectId}?${newParams.toString()}`, { replace: true });
+        }
+    }, [searchParams, handleFileSelect, navigate, projectId]);
+
     // Handle Ctrl+S / Cmd+S hotkey
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -414,25 +462,6 @@ const IDELayout: React.FC = () => {
         }
     };
 
-    const handleFileSelect = async (filePath: string) => {
-        try {
-            isLoadingFile.current = true;
-            const response = await fetch(`http://localhost:3001/api/files/read?filePath=${encodeURIComponent(filePath)}`);
-            const data = await response.json();
-            if (data.success) {
-                setCode(data.content);
-                setSavedCode(data.content);
-                setCurrentFilePath(filePath);
-                setSavedCode(data.content);
-                // setIsDirty(false);
-            }
-        } catch (error) {
-            console.error('Failed to read file:', error);
-            alert('Failed to open file');
-        } finally {
-            isLoadingFile.current = false;
-        }
-    };
 
     const handleSave = async () => {
         if (!currentFilePath) {
