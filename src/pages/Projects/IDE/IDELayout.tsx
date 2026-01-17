@@ -652,7 +652,7 @@ const IDELayout: React.FC = () => {
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px',
+                                    gap: '8px',
                                     padding: '6px 14px',
                                     backgroundColor: '#f3f4f6',
                                     border: '1px solid #e5e7eb',

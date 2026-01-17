@@ -30,7 +30,7 @@
 .clone-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: #ea580c;
     color: white;
     border: none;
@@ -201,7 +201,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     border-bottom: 2px solid transparent;

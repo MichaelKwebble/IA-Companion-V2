@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 const UpdateLibraryButton: React.FC = () => {
     const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'updating' | 'success' | 'error'>('idle');
@@ -77,7 +77,10 @@ const UpdateLibraryButton: React.FC = () => {
                     border: 'none',
                     cursor: status === 'updating' ? 'not-allowed' : 'pointer',
                     fontSize: '13px',
-                    height: '36px'
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
                 }}
             >
                 {status === 'updating' ? (
@@ -97,7 +100,7 @@ const UpdateLibraryButton: React.FC = () => {
                     </>
                 ) : (
                     <>
-                        <Download size={16} />
+                        <RefreshCw size={16} className={status === 'checking' ? 'rotating-spin' : ''} />
                         {status === 'available' ? 'Update Library' : 'Download Firmware'}
                     </>
                 )}
