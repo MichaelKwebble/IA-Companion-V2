@@ -182,7 +182,7 @@ const BoardsManager: React.FC = () => {
                 </div>
                 <div className="arduino-toolbar-actions">
                     <button className="arduino-action-btn" onClick={handleRefresh} disabled={isRefreshing} title="Update Index">
-                        <RefreshCw size={16} className={isRefreshing ? 'arduino-animate-spin' : ''} />
+                        <RefreshCw size={16} className={isRefreshing ? 'rotating-spin' : ''} />
                         Refresh
                     </button>
                     <button className="arduino-action-btn" onClick={() => setShowSettings(true)} title="Additional URLs">
@@ -195,7 +195,7 @@ const BoardsManager: React.FC = () => {
             <div className="arduino-items-list">
                 {isLoading ? (
                     <div className="arduino-loading-state">
-                        <RefreshCw size={24} className="arduino-animate-spin" />
+                        <RefreshCw size={24} className="rotating-spin" />
                         <p>Searching for boards...</p>
                     </div>
                 ) : platforms.length === 0 ? (
@@ -226,7 +226,7 @@ const BoardsManager: React.FC = () => {
                             <div className="arduino-item-actions">
                                 {installingIds.has(platform.id) ? (
                                     <div className="arduino-installing-state">
-                                        <Loader2 size={16} className="arduino-animate-spin" />
+                                        <Loader2 size={16} className="rotating-spin" />
                                         <span>Processing...</span>
                                     </div>
                                 ) : (
@@ -280,8 +280,8 @@ const BoardsManager: React.FC = () => {
             </div>
 
             {showSettings && (
-                <div className="arduino-settings-modal-overlay">
-                    <div className="arduino-settings-modal">
+                <div className="arduino-settings-modal-overlay" onClick={() => setShowSettings(false)}>
+                    <div className="arduino-settings-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="arduino-settings-header">
                             <h3>Additional Boards Manager URLs</h3>
                             <button onClick={() => setShowSettings(false)}><X size={18} /></button>

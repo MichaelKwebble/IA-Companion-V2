@@ -8,27 +8,40 @@ import LectureViewer from './pages/Lectures/LectureViewer';
 import Community from './pages/Community';
 import { DeviceProvider } from './context/DeviceContext';
 
+import LoginPage from './pages/Auth/LoginPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider } from './context/AuthContext';
+
 function App() {
   return (
     <DeviceProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={import.meta.env.VITE_APP_MODE === 'production' ? <Navigate to="/projects" replace /> : <Home />} />
-            <Route path="projects">
-              <Route index element={<ProjectDashboard />} />
-              <Route path=":projectId" element={<IDELayout />} />
+      <AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+
+            <Route path="/" element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={import.meta.env.VITE_APP_MODE === 'production' ? <Navigate to="/projects" replace /> : <Home />} />
+              <Route path="projects">
+                <Route index element={<ProjectDashboard />} />
+                <Route path=":projectId" element={<IDELayout />} />
+              </Route>
+              <Route path="lectures">
+                <Route index element={<LectureDashboard />} />
+                <Route path=":classId/lesson/:lessonId" element={<LectureViewer />} />
+              </Route>
+              <Route path="community" element={<Community />} />
             </Route>
-            <Route path="lectures">
-              <Route index element={<LectureDashboard />} />
-              <Route path=":classId/lesson/:lessonId" element={<LectureViewer />} />
-            </Route>
-            <Route path="community" element={<Community />} />
+
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </Router>
+          </Routes>
+        </Router>
+      </AuthProvider>
     </DeviceProvider>
   );
 }

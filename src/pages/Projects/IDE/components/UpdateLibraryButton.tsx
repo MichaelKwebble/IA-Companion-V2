@@ -82,7 +82,7 @@ const UpdateLibraryButton: React.FC = () => {
             >
                 {status === 'updating' ? (
                     <>
-                        <Loader2 size={16} className="animate-spin" />
+                        <Loader2 size={16} className="rotating-spin" />
                         Updating...
                     </>
                 ) : status === 'success' ? (

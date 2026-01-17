@@ -690,7 +690,7 @@ const IDELayout: React.FC = () => {
                             >
                                 {isFlashing ? (
                                     <>
-                                        <div className="animate-spin" style={{ width: '16px', height: '16px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
+                                        <div className="rotating-spin" style={{ width: '16px', height: '16px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
                                         Uploading...
                                     </>
                                 ) : (
@@ -1042,8 +1042,8 @@ const IDELayout: React.FC = () => {
 
             {/* Device Picker Modal for Multiple Products */}
             {showDevicePicker && (
-                <div style={modalStyles.overlay}>
-                    <div style={modalStyles.container}>
+                <div style={modalStyles.overlay} onClick={() => setShowDevicePicker(false)}>
+                    <div style={modalStyles.container} onClick={(e) => e.stopPropagation()}>
                         <div style={modalStyles.header}>
                             <Usb size={24} color="#2563eb" />
                             <h2 style={modalStyles.title}>Multiple Devices Detected</h2>
@@ -1100,12 +1100,16 @@ const modalStyles: { [key: string]: React.CSSProperties } = {
     container: {
         backgroundColor: '#fff',
         borderRadius: '16px',
-        width: '450px',
+        width: 'var(--modal-width-default)',
+        maxWidth: 'var(--modal-max-width)',
+        height: 'auto',
+        maxHeight: 'var(--modal-max-height)',
         padding: '32px',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         display: 'flex',
         flexDirection: 'column',
         gap: '20px',
+        overflow: 'auto',
     },
     header: {
         display: 'flex',

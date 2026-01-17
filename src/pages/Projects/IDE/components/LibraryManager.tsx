@@ -296,7 +296,7 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                         >Updatable</button>
                     </div>
                     <button className="arduino-action-btn" onClick={handleRefresh} disabled={isRefreshing}>
-                        <RefreshCw size={16} className={isRefreshing ? 'arduino-animate-spin' : ''} />
+                        <RefreshCw size={16} className={isRefreshing ? 'rotating-spin' : ''} />
                         Refresh
                     </button>
                     <button className="arduino-action-btn" onClick={() => fileInputRef.current?.click()}>
@@ -330,7 +330,7 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
             <div className="arduino-items-list">
                 {isLoading ? (
                     <div className="arduino-loading-state">
-                        <RefreshCw size={24} className="arduino-animate-spin" />
+                        <RefreshCw size={24} className="rotating-spin" />
                         <p>Searching for libraries...</p>
                     </div>
                 ) : filteredLibraries.length === 0 ? (
@@ -366,7 +366,7 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                                 <div className="arduino-item-actions">
                                     {installingIds.has(lib.name) ? (
                                         <div className="arduino-installing-state">
-                                            <Loader2 size={16} className="arduino-animate-spin" />
+                                            <Loader2 size={16} className="rotating-spin" />
                                             <span>Processing...</span>
                                         </div>
                                     ) : (
@@ -399,7 +399,7 @@ const LibraryManager: React.FC<LibraryManagerProps> = ({ onOpenExample }) => {
                                                             {lib.installed_version === (selectedVersions[lib.name] || lib.latest_version) ? 'Installed' : 'Install'}
                                                         </button>
                                                         <button className="arduino-btn-examples" onClick={() => handleFetchExamples(lib.name)}>
-                                                            {loadingExamples === lib.name ? <Loader2 size={14} className="arduino-animate-spin" /> : expandedExamples === lib.name ? <ChevronDown size={14} /> : <BookOpen size={14} />}
+                                                            {loadingExamples === lib.name ? <Loader2 size={14} className="rotating-spin" /> : expandedExamples === lib.name ? <ChevronDown size={14} /> : <BookOpen size={14} />}
                                                             Examples
                                                         </button>
                                                         <button className="arduino-btn-remove" onClick={() => handleUninstall(lib.name)}>

@@ -105,8 +105,8 @@ const BoardPortSelectorModal: React.FC<BoardPortSelectorModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" style={styles.overlay}>
-            <div className="modal-container" style={styles.container}>
+        <div className="modal-overlay" style={styles.overlay} onClick={onClose}>
+            <div className="modal-container" style={styles.container} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div style={styles.header}>
                     <div style={styles.headerLeft}>
@@ -133,7 +133,7 @@ const BoardPortSelectorModal: React.FC<BoardPortSelectorModalProps> = ({
                         <div style={styles.searchArea}>
                             <div style={styles.labelRow}>
                                 <label style={styles.label}>Target Board</label>
-                                {isLoading && <RefreshCw className="spin" size={14} color="#2563eb" />}
+                                {isLoading && <RefreshCw className="rotating-spin" size={14} color="#2563eb" />}
                             </div>
                             <div style={styles.searchWrapper}>
                                 <Search size={18} style={styles.searchIcon} />
@@ -290,8 +290,6 @@ const BoardPortSelectorModal: React.FC<BoardPortSelectorModalProps> = ({
             </div>
 
             <style>{`
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                .spin { animation: spin 1s linear infinite; }
                 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
@@ -320,8 +318,10 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: '#fff',
         borderRadius: '16px',
         boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
-        width: '850px',
-        maxHeight: '85vh',
+        width: 'var(--modal-width-default)',
+        maxWidth: 'var(--modal-max-width)',
+        height: 'var(--modal-height-default)',
+        maxHeight: 'var(--modal-max-height)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

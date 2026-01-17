@@ -24,8 +24,8 @@ const ArduinoManagerModal: React.FC<ArduinoManagerModalProps> = ({ onClose, onOp
     }, [arduinoLogs, isConsoleOpen]);
 
     return (
-        <div className="arduino-manager-overlay">
-            <div className="arduino-manager-modal">
+        <div className="arduino-manager-overlay" onClick={onClose}>
+            <div className="arduino-manager-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="arduino-modal-header">
                     <div className="arduino-header-left">
                         <Package size={20} className="arduino-header-icon" />

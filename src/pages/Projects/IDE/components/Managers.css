@@ -359,7 +359,10 @@
 }
 
 .arduino-settings-modal {
-    width: 500px;
+    width: var(--modal-width-default);
+    max-width: var(--modal-max-width);
+    height: auto;
+    max-height: var(--modal-max-height);
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
@@ -547,6 +550,7 @@
     transform-origin: center;
     display: inline-block;
 }
+
 .arduino-version-select {
     padding: 6px 10px;
     border: 1px solid #e2e8f0;

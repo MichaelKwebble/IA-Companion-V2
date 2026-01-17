@@ -14,8 +14,10 @@
 }
 
 .arduino-manager-modal {
-    width: 900px;
-    height: 700px;
+    width: var(--modal-width-default);
+    max-width: var(--modal-max-width);
+    height: var(--modal-height-default);
+    max-height: var(--modal-max-height);
     background: #ffffff;
     border-radius: 16px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
