@@ -1,24 +1,9 @@
 .lecture-dashboard {
-    padding: var(--space-xl);
-    max-width: 1400px;
-    margin: 0 auto;
+    padding: var(--space-md);
 }
 
 .dashboard-header {
     margin-bottom: var(--space-xl);
-}
-
-.dashboard-header h1 {
-    margin: 0 0 var(--space-xs) 0;
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-}
-
-.dashboard-subtitle {
-    margin: 0;
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
 }
 
 .classes-section {

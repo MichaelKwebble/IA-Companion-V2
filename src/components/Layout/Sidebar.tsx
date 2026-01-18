@@ -10,10 +10,22 @@ import './Sidebar.css';
 const Sidebar: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isAdminOpen, setIsAdminOpen] = React.useState(false);
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, profile } = useAuth();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
   const isProduction = import.meta.env.VITE_APP_MODE === 'production';
 
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.avatar-container')) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   React.useEffect(() => {
     const handleOpenAdmin = () => {
@@ -22,6 +34,10 @@ const Sidebar: React.FC = () => {
       } else {
         alert('Access Denied: You do not have administrator privileges.');
       }
+    };
+
+    const handleOpenUILibrary = () => {
+      navigate('/ui-library');
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -42,10 +58,12 @@ const Sidebar: React.FC = () => {
     };
 
     window.addEventListener('open-admin-mode', handleOpenAdmin);
+    window.addEventListener('open-ui-library', handleOpenUILibrary);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('open-file', handleOpenFile);
     return () => {
       window.removeEventListener('open-admin-mode', handleOpenAdmin);
+      window.removeEventListener('open-ui-library', handleOpenUILibrary);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('open-file', handleOpenFile);
     };
@@ -88,19 +106,39 @@ const Sidebar: React.FC = () => {
         <button className="nav-item" title="Search /" onClick={() => setIsSearchOpen(true)}>
           <Search size={20} />
         </button>
-        <button className="nav-item" title="Settings">
-          <Settings size={20} />
-        </button>
-        {!isProduction && (
-          <button className="nav-item logout-btn" title="Logout" onClick={handleLogout}>
-            <LogOut size={20} />
+
+        <div className="avatar-container">
+          <button
+            className="avatar-placeholder"
+            title={profile?.nickname || user?.email || 'User'}
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            style={{ backgroundColor: profile?.bgColor || '#3b82f6' }}
+          >
+            {profile?.emoji ? (
+              <span className="avatar-emoji">{profile.emoji}</span>
+            ) : user?.photoURL ? (
+              <img src={user.photoURL} alt="Avatar" className="avatar-img" />
+            ) : (
+              user?.email?.charAt(0).toUpperCase() || 'U'
+            )}
           </button>
-        )}
-        <div className="avatar-placeholder" title={user?.email || 'User'}>
-          {user?.photoURL ? (
-            <img src={user.photoURL} alt="Avatar" className="avatar-img" />
-          ) : (
-            user?.email?.charAt(0).toUpperCase() || 'U'
+
+          {isProfileMenuOpen && (
+            <div className="profile-menu">
+              <div className="profile-menu-header">
+                <span className="profile-nickname">{profile?.nickname || user?.email?.split('@')[0]}</span>
+                <span className="profile-email">{user?.email}</span>
+              </div>
+              <div className="profile-menu-divider" />
+              <button className="profile-menu-item" onClick={() => { navigate('/settings'); setIsProfileMenuOpen(false); }}>
+                <Settings size={16} />
+                Settings
+              </button>
+              <button className="profile-menu-item logout" onClick={() => { handleLogout(); setIsProfileMenuOpen(false); }}>
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
           )}
         </div>
       </div>

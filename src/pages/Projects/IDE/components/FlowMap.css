@@ -42,3 +42,35 @@
     background-color: #3b82f6;
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
 }
+
+/* Empty State */
+.flow-map-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6b7280;
+    text-align: center;
+    padding: 24px;
+}
+
+.flow-map-empty .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.flow-map-empty h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 8px 0;
+}
+
+.flow-map-empty p {
+    font-size: 13px;
+    color: #9ca3af;
+    margin: 0;
+    max-width: 200px;
+}

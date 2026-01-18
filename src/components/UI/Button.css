@@ -1,0 +1,108 @@
+.btn-component {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    outline: none;
+    white-space: nowrap;
+}
+
+/* Variants */
+.btn-component.primary {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-component.primary:hover {
+    background-color: var(--color-primary-hover);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-component.secondary {
+    background-color: var(--color-bg-app);
+    color: var(--color-text-primary);
+    border-color: var(--color-border);
+}
+
+.btn-component.secondary:hover {
+    background-color: var(--color-bg-hover);
+}
+
+.btn-component.outline {
+    background-color: transparent;
+    border-color: var(--color-border-strong);
+    color: var(--color-text-primary);
+}
+
+.btn-component.outline:hover {
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-text-primary);
+}
+
+.btn-component.ghost {
+    background-color: transparent;
+    color: var(--color-text-secondary);
+}
+
+.btn-component.ghost:hover {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.btn-component.danger {
+    background-color: var(--color-error);
+    color: white;
+}
+
+.btn-component.danger:hover {
+    filter: brightness(0.9);
+}
+
+/* Sizes */
+.btn-component.sm {
+    padding: 4px 10px;
+    font-size: var(--font-size-xs);
+    height: 28px;
+}
+
+.btn-component.md {
+    padding: 6px 14px;
+    font-size: var(--font-size-sm);
+    height: 34px;
+}
+
+.btn-component.lg {
+    padding: 10px 20px;
+    font-size: var(--font-size-md);
+    height: 42px;
+}
+
+/* Loading State */
+.btn-component.loading {
+    cursor: wait;
+    opacity: 0.8;
+}
+
+.spinner-sm {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: rotating-spin 0.6s linear infinite;
+}
+
+/* Disabled State */
+.btn-component:disabled:not(.loading) {
+    background-color: var(--color-bg-app);
+    color: var(--color-text-disabled);
+    border-color: var(--color-border);
+    cursor: not-allowed;
+    box-shadow: none;
+}

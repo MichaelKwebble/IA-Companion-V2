@@ -8,6 +8,7 @@ interface Project {
     name: string;
     type: 'code' | 'design';
     path?: string;
+    pathExists?: boolean;
     lastModified: string;
 }
 
@@ -18,40 +19,64 @@ const ProjectDashboard: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [projects, setProjects] = useState<Project[]>([]);
 
-    React.useEffect(() => {
-        const fetchProjects = async () => {
-            try {
-                const response = await fetch('http://localhost:3001/api/projects');
-                const data = await response.json();
-                if (data.success) {
-                    setProjects(data.projects);
-                }
-            } catch (error) {
-                console.error('Failed to fetch projects:', error);
+    const fetchProjects = async () => {
+        try {
+            const response = await fetch('http://localhost:3001/api/projects');
+            const data = await response.json();
+            if (data.success) {
+                setProjects(data.projects);
             }
-        };
+        } catch (error) {
+            console.error('Failed to fetch projects:', error);
+        }
+    };
+
+    React.useEffect(() => {
         fetchProjects();
     }, []);
+
+    const handleRedirectDirectory = async (project: Project) => {
+        const electron = (window as any).electron;
+        if (!electron) return;
+
+        try {
+            const newPath = await electron.project.selectDirectory();
+            if (newPath) {
+                const response = await fetch(`http://localhost:3001/api/projects/${project.id}/update-path`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: newPath })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    fetchProjects();
+                } else {
+                    alert('Failed to update path: ' + data.error);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to redirect directory:', error);
+            alert('Failed to redirect directory');
+        }
+    };
 
     const handleCreateProject = (type: 'code' | 'design') => {
         if (type === 'code') {
             setIsModalOpen(true);
         } else {
-            // Design project flow (mock)
             const newId = Math.random().toString(36).substr(2, 9);
             navigate(`/projects/${newId}?type=${type}`);
         }
     };
 
     const handleModalSubmit = (project: Project) => {
-        console.log('Project created:', project);
         setProjects(prev => [project, ...prev]);
         navigate(`/projects/${project.id}?type=code&name=${encodeURIComponent(project.name)}`);
     };
 
-    const handleDeleteProject = async (e: React.MouseEvent, project: Project) => {
-        e.stopPropagation(); // Prevent card click
-        if (!confirm(`Are you sure you want to delete project "${project.name}"? This will permanently delete the files from disk.`)) {
+    const handleDeleteProject = async (e: React.MouseEvent | null, project: Project) => {
+        if (e) e.stopPropagation();
+        if (!confirm(`Are you sure you want to delete project "${project.name}"?`)) {
             return;
         }
 
@@ -70,6 +95,8 @@ const ProjectDashboard: React.FC = () => {
             alert('Failed to delete project');
         }
     };
+
+    const missingProjects = projects.filter(p => p.pathExists === false);
 
     return (
         <div className="project-dashboard p-md">
@@ -94,13 +121,19 @@ const ProjectDashboard: React.FC = () => {
 
             <div className="project-grid">
                 {projects.map((project) => (
-                    <div key={project.id} className="project-card panel" onClick={() => navigate(`/projects/${project.id}?type=${project.type}`)}>
+                    <div
+                        key={project.id}
+                        className={`project-card panel ${!project.pathExists ? 'missing' : ''}`}
+                        onClick={() => project.pathExists && navigate(`/projects/${project.id}?type=${project.type}`)}
+                    >
                         <div className="card-preview">
                             {project.type === 'code' ? <Code size={48} className="text-secondary" /> : <PenTool size={48} className="text-secondary" />}
                         </div>
                         <div className="card-info">
                             <h3>{project.name}</h3>
-                            <span className="text-sm text-secondary">{project.type === 'code' ? 'Arduino Project' : 'UI Design'} • {project.lastModified}</span>
+                            <span className="text-sm text-secondary">
+                                {project.type === 'code' ? 'Arduino Project' : 'UI Design'} • {project.lastModified}
+                            </span>
                         </div>
                         <button
                             className="delete-project-btn"
@@ -109,9 +142,31 @@ const ProjectDashboard: React.FC = () => {
                         >
                             <Trash2 size={18} />
                         </button>
+                        {!project.pathExists && (
+                            <div className="missing-badge">Path Missing</div>
+                        )}
                     </div>
                 ))}
             </div>
+
+            {missingProjects.length > 0 && (
+                <div className="missing-projects-banner">
+                    <div className="banner-content">
+                        <strong>Missing Project Directories:</strong>
+                        <div className="missing-list">
+                            {missingProjects.map(p => (
+                                <div key={p.id} className="missing-item">
+                                    <span>{p.name}</span>
+                                    <div className="missing-actions">
+                                        <button onClick={() => handleRedirectDirectory(p)}>Redirect</button>
+                                        <button className="danger" onClick={() => handleDeleteProject(null, p)}>Delete</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

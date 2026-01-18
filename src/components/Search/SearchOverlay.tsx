@@ -21,6 +21,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
     const [results, setResults] = useState<FileItem[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [isAdminModeRequested, setIsAdminModeRequested] = useState(false);
+    const [isUILibraryRequested, setIsUILibraryRequested] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -30,6 +31,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
             setResults([]);
             setSelectedIndex(0);
             setIsAdminModeRequested(false);
+            setIsUILibraryRequested(false);
         }
     }, [isOpen]);
 
@@ -39,8 +41,12 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
         if (val.toLowerCase() === 'adminmode') {
             setIsAdminModeRequested(true);
             return;
+        } else if (val.toLowerCase() === 'uilibrary') {
+            setIsUILibraryRequested(true);
+            return;
         } else {
             setIsAdminModeRequested(false);
+            setIsUILibraryRequested(false);
         }
 
         if (val.length < 1) {
@@ -93,6 +99,9 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
             if (isAdminModeRequested) {
                 window.dispatchEvent(new CustomEvent('open-admin-mode'));
                 onClose();
+            } else if (isUILibraryRequested) {
+                window.dispatchEvent(new CustomEvent('open-ui-library'));
+                onClose();
             } else if (results.length > 0) {
                 handleFileOpen(results[selectedIndex]);
             }
@@ -129,6 +138,17 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
                             <div className="admin-text">
                                 <span className="title">Secret Admin Mode Detected</span>
                                 <span className="subtitle">Press Enter or Click to Enter Backend Manager</span>
+                            </div>
+                        </div>
+                    ) : isUILibraryRequested ? (
+                        <div className="admin-magic-link" onClick={() => {
+                            window.dispatchEvent(new CustomEvent('open-ui-library'));
+                            onClose();
+                        }}>
+                            <Search size={24} className="admin-icon" style={{ color: 'var(--color-primary)' }} />
+                            <div className="admin-text">
+                                <span className="title">Open UI Component Library</span>
+                                <span className="subtitle">Press Enter or Click to view standardized components</span>
                             </div>
                         </div>
                     ) : (

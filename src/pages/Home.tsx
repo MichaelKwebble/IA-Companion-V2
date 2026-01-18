@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDevice } from '../context/DeviceContext';
 import SensorGrid from '../components/SensorGrid';
+import { RefreshCw, AlertTriangle, Link, Search } from 'lucide-react';
 import '../styles/DeviceDetection.css';
 
 const Home: React.FC = () => {
@@ -21,21 +22,26 @@ const Home: React.FC = () => {
 
     return (
         <div className="p-md">
-            <h1>Welcome to IA Companion V2</h1>
-            <p>Select a tab from the sidebar to get started.</p>
+            <div className="dashboard-header">
+                <div>
+                    <h1>Welcome to IA Companion V2</h1>
+                    <p className="dashboard-subtitle">Select a tab from the sidebar to get started.</p>
+                </div>
+            </div>
 
             {/* Device Detection Section */}
             <div className="device-detection-container">
                 <div className="device-detection-header">
-                    <h2>🔌 ESP32-S3 Device Detection</h2>
+                    <h2>ESP32-S3 Device Detection</h2>
                     <button onClick={refresh} className="refresh-btn" disabled={isLoading}>
-                        {isLoading ? '⟳ Loading...' : '🔄 Refresh'}
+                        <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
+                        {isLoading ? 'Scanning...' : 'Refresh'}
                     </button>
                 </div>
 
                 {error && (
                     <div className="device-error">
-                        <span className="error-icon">⚠️</span>
+                        <span className="error-icon"><AlertTriangle size={20} /></span>
                         <span>Error: {error}</span>
                         <p className="error-hint">Make sure the backend server is running on port 3001</p>
                     </div>
@@ -43,7 +49,7 @@ const Home: React.FC = () => {
 
                 {connectionError && (
                     <div className="device-error">
-                        <span className="error-icon">⚠️</span>
+                        <span className="error-icon"><AlertTriangle size={20} /></span>
                         <span>Serial Connection Error: {connectionError}</span>
                         {devices.length > 0 && (
                             <button
@@ -52,7 +58,8 @@ const Home: React.FC = () => {
                                 style={{ marginTop: '0.5rem' }}
                                 disabled={isConnecting}
                             >
-                                {isConnecting ? 'Connecting...' : '🔄 Retry Connection'}
+                                <RefreshCw size={14} className={isConnecting ? 'spin' : ''} />
+                                {isConnecting ? 'Connecting...' : 'Retry Connection'}
                             </button>
                         )}
                     </div>
@@ -68,8 +75,8 @@ const Home: React.FC = () => {
                                 {devices.length} device{devices.length !== 1 ? 's' : ''} detected
                             </span>
                             {isConnected ? (
-                                <span className="status-indicator connected">
-                                    🔗 Serial Connected
+                                <span className="status-indicator connected flex items-center gap-xs">
+                                    <Link size={14} /> Serial Connected
                                 </span>
                             ) : devices.length > 0 && (
                                 <button
@@ -78,7 +85,15 @@ const Home: React.FC = () => {
                                     style={{ marginLeft: '1rem', padding: '4px 12px', fontSize: '0.85rem' }}
                                     disabled={isConnecting}
                                 >
-                                    {isConnecting ? '⟳ Connecting...' : '🔗 Reconnect'}
+                                    {isConnecting ? (
+                                        <>
+                                            <RefreshCw size={14} className="spin" /> Connecting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Link size={14} /> Reconnect
+                                        </>
+                                    )}
                                 </button>
                             )}
                             {lastUpdate && (
@@ -90,7 +105,7 @@ const Home: React.FC = () => {
 
                         {devices.length === 0 ? (
                             <div className="no-devices">
-                                <div className="no-devices-icon">🔍</div>
+                                <div className="no-devices-icon"><Search size={48} /></div>
                                 <h3>No ESP32-S3 devices found</h3>
                                 <p>Connect an ESP32-S3 device via USB to get started</p>
                                 <div className="detection-info">

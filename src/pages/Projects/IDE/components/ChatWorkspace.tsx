@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MessageSquare, Plus, Send, ChevronLeft, Edit2, GitMerge, Bot } from 'lucide-react';
 import './ChatWorkspace.css';
 import FlowMap from './FlowMap';
+import { parseCodeToFlow } from '../../../../utils/codeFlowParser';
 
 interface ChatSession {
     id: string;
@@ -23,10 +24,19 @@ const MOCK_CHATS: ChatSession[] = [
 
 interface ChatWorkspaceProps {
     isDesignMode?: boolean;
+    code?: string;
 }
 
-const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false }) => {
+const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false, code = '' }) => {
     const [mode, setMode] = useState<'agents' | 'flow'>('agents');
+
+    // Parse code to generate flowchart data
+    const flowData = useMemo(() => {
+        if (!code || code.trim() === '') {
+            return { nodes: [], edges: [] };
+        }
+        return parseCodeToFlow(code);
+    }, [code]);
     const [chats, setChats] = useState<ChatSession[]>(MOCK_CHATS);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([
@@ -105,7 +115,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false }) =
             )}
 
             {mode === 'flow' ? (
-                <FlowMap />
+                <FlowMap nodes={flowData.nodes} edges={flowData.edges} />
             ) : (
                 <>
                     {activeChatId && activeChat ? (

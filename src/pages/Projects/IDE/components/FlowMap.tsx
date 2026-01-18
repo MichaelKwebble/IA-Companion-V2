@@ -1,79 +1,162 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import './FlowMap.css';
 
-interface Node {
+export interface FlowNode {
     id: string;
     label: string;
-    type: 'start' | 'process' | 'decision' | 'end';
+    type: 'start' | 'process' | 'decision' | 'end' | 'loop';
     x: number;
     y: number;
 }
 
-interface Edge {
+export interface FlowEdge {
     id: string;
     from: string;
     to: string;
+    label?: string;
 }
 
-const MOCK_NODES: Node[] = [
-    { id: '1', label: 'Setup()', type: 'start', x: 150, y: 50 },
-    { id: '2', label: 'Initialize Serial', type: 'process', x: 150, y: 150 },
-    { id: '3', label: 'Loop()', type: 'process', x: 150, y: 250 },
-    { id: '4', label: 'Read Sensor', type: 'process', x: 150, y: 350 },
-    { id: '5', label: 'Value > 500?', type: 'decision', x: 150, y: 450 },
-    { id: '6', label: 'LED ON', type: 'process', x: 50, y: 550 },
-    { id: '7', label: 'LED OFF', type: 'process', x: 250, y: 550 },
-];
+interface FlowMapProps {
+    nodes?: FlowNode[];
+    edges?: FlowEdge[];
+}
 
-const MOCK_EDGES: Edge[] = [
-    { id: 'e1', from: '1', to: '2' },
-    { id: 'e2', from: '2', to: '3' },
-    { id: 'e3', from: '3', to: '4' },
-    { id: 'e4', from: '4', to: '5' },
-    { id: 'e5', from: '5', to: '6' },
-    { id: 'e6', from: '5', to: '7' },
-    { id: 'e7', from: '6', to: '3' }, // Loop back
-    { id: 'e8', from: '7', to: '3' }, // Loop back
-];
+const FlowMap: React.FC<FlowMapProps> = ({ nodes = [], edges = [] }) => {
+    const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
 
-const FlowMap: React.FC = () => {
-    const [activeNodeId, setActiveNodeId] = useState<string>('1');
+    // Calculate SVG viewBox based on nodes
+    const viewBox = useMemo(() => {
+        if (nodes.length === 0) return "0 0 400 300";
 
+        const maxX = Math.max(...nodes.map(n => n.x)) + 150;
+        const maxY = Math.max(...nodes.map(n => n.y)) + 100;
+        return `0 0 ${Math.max(400, maxX)} ${Math.max(300, maxY)}`;
+    }, [nodes]);
+
+    // Simulate execution flow animation
     useEffect(() => {
-        // Simulate execution flow
-        const sequence = ['1', '2', '3', '4', '5', '6', '3', '4', '5', '7', '3'];
+        if (nodes.length === 0) return;
+
+        const nodeIds = nodes.map(n => n.id);
         let i = 0;
+
+        // Start with first node
+        setActiveNodeId(nodeIds[0]);
+
         const interval = setInterval(() => {
-            setActiveNodeId(sequence[i % sequence.length]);
-            i++;
+            i = (i + 1) % nodeIds.length;
+            setActiveNodeId(nodeIds[i]);
         }, 1500);
+
         return () => clearInterval(interval);
-    }, []);
+    }, [nodes]);
+
+    // Get node shape based on type
+    const getNodeShape = (node: FlowNode, isActive: boolean) => {
+        const fill = isActive ? "#eff6ff" : "white";
+        const stroke = isActive ? "#3b82f6" : "#e5e7eb";
+        const strokeWidth = isActive ? 2 : 1;
+
+        switch (node.type) {
+            case 'start':
+            case 'end':
+                return (
+                    <ellipse
+                        cx="60"
+                        cy="20"
+                        rx="55"
+                        ry="18"
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                    />
+                );
+            case 'decision':
+                return (
+                    <polygon
+                        points="60,0 120,20 60,40 0,20"
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                    />
+                );
+            case 'loop':
+                return (
+                    <rect
+                        width="120"
+                        height="40"
+                        rx="20"
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                    />
+                );
+            default:
+                return (
+                    <rect
+                        width="120"
+                        height="40"
+                        rx="4"
+                        fill={fill}
+                        stroke={stroke}
+                        strokeWidth={strokeWidth}
+                    />
+                );
+        }
+    };
+
+    // Empty state
+    if (nodes.length === 0) {
+        return (
+            <div className="flow-map-container">
+                <div className="flow-map-empty">
+                    <div className="empty-icon">📊</div>
+                    <h3>No Flow to Display</h3>
+                    <p>Write some code in the editor to see the flow diagram.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flow-map-container">
-            <svg className="flow-map-svg" width="100%" height="100%" viewBox="0 0 400 700">
+            <svg className="flow-map-svg" width="100%" height="100%" viewBox={viewBox}>
                 <defs>
                     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                         <polygon points="0 0, 10 3.5, 0 7" fill="#9ca3af" />
                     </marker>
+                    <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+                    </marker>
                 </defs>
 
                 {/* Edges */}
-                {MOCK_EDGES.map(edge => {
-                    const fromNode = MOCK_NODES.find(n => n.id === edge.from);
-                    const toNode = MOCK_NODES.find(n => n.id === edge.to);
+                {edges.map(edge => {
+                    const fromNode = nodes.find(n => n.id === edge.from);
+                    const toNode = nodes.find(n => n.id === edge.to);
                     if (!fromNode || !toNode) return null;
 
-                    // Simple straight lines for now, specialized logic for loops would be needed for curves
-                    let d = `M ${fromNode.x + 50} ${fromNode.y + 40} L ${toNode.x + 50} ${toNode.y}`;
+                    // Calculate path
+                    const fromX = fromNode.x + 60;
+                    const fromY = fromNode.y + 40;
+                    const toX = toNode.x + 60;
+                    const toY = toNode.y;
 
-                    // Custom path for loop back
-                    if (edge.to === '3' && (edge.from === '6' || edge.from === '7')) {
-                        const offset = edge.from === '6' ? -60 : 60;
-                        d = `M ${fromNode.x + 50} ${fromNode.y + 40} C ${fromNode.x + 50 + offset} ${fromNode.y + 80}, ${toNode.x + 50 + offset} ${toNode.y + 40}, ${toNode.x + 50} ${toNode.y + 40}`;
+                    // Check if it's a loop-back edge (going up)
+                    const isLoopBack = toY <= fromY - 40;
+
+                    let d: string;
+                    if (isLoopBack) {
+                        // Curved path for loop-back
+                        const offset = fromX < toX ? -80 : 80;
+                        d = `M ${fromX} ${fromY} C ${fromX + offset} ${fromY + 40}, ${toX + offset} ${toY - 20}, ${toX} ${toY}`;
+                    } else {
+                        // Straight or curved path
+                        d = `M ${fromX} ${fromY} L ${toX} ${toY}`;
                     }
+
+                    const isActive = activeNodeId === edge.from;
 
                     return (
                         <g key={edge.id}>
@@ -84,48 +167,61 @@ const FlowMap: React.FC = () => {
                                 fill="none"
                                 markerEnd="url(#arrowhead)"
                             />
-                            {/* Glowing Path Animation */}
-                            {(activeNodeId === edge.from) && (
+                            {/* Animated path when active */}
+                            {isActive && (
                                 <motion.path
                                     d={d}
                                     stroke="#3b82f6"
                                     strokeWidth="2"
                                     fill="none"
+                                    markerEnd="url(#arrowhead-active)"
                                     initial={{ pathLength: 0, opacity: 0 }}
                                     animate={{ pathLength: 1, opacity: 1 }}
                                     transition={{ duration: 0.8, ease: "easeInOut" }}
                                 />
+                            )}
+                            {/* Edge label */}
+                            {edge.label && (
+                                <text
+                                    x={(fromX + toX) / 2 + 10}
+                                    y={(fromY + toY) / 2}
+                                    fontSize="10"
+                                    fill="#6b7280"
+                                >
+                                    {edge.label}
+                                </text>
                             )}
                         </g>
                     );
                 })}
 
                 {/* Nodes */}
-                {MOCK_NODES.map(node => (
-                    <g key={node.id} transform={`translate(${node.x}, ${node.y})`}>
-                        <motion.rect
-                            width="100"
-                            height="40"
-                            rx="8"
-                            fill={activeNodeId === node.id ? "#eff6ff" : "white"}
-                            stroke={activeNodeId === node.id ? "#3b82f6" : "#e5e7eb"}
-                            strokeWidth={activeNodeId === node.id ? "2" : "1"}
-                            animate={{
-                                boxShadow: activeNodeId === node.id ? "0 0 15px rgba(59, 130, 246, 0.5)" : "none"
-                            }}
-                        />
-                        <text
-                            x="50"
-                            y="25"
-                            textAnchor="middle"
-                            fontSize="12"
-                            fill={activeNodeId === node.id ? "#1d4ed8" : "#374151"}
-                            style={{ pointerEvents: 'none' }}
-                        >
-                            {node.label}
-                        </text>
-                    </g>
-                ))}
+                {nodes.map(node => {
+                    const isActive = activeNodeId === node.id;
+
+                    return (
+                        <g key={node.id} transform={`translate(${node.x}, ${node.y})`}>
+                            <motion.g
+                                animate={{
+                                    scale: isActive ? 1.02 : 1
+                                }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                {getNodeShape(node, isActive)}
+                                <text
+                                    x="60"
+                                    y="25"
+                                    textAnchor="middle"
+                                    fontSize="11"
+                                    fill={isActive ? "#1d4ed8" : "#374151"}
+                                    style={{ pointerEvents: 'none' }}
+                                >
+                                    {node.label.length > 18 ? node.label.substring(0, 15) + '...' : node.label}
+                                </text>
+                            </motion.g>
+                        </g>
+                    );
+                })}
             </svg>
 
             <div className="flow-legend">
@@ -141,3 +237,4 @@ const FlowMap: React.FC = () => {
 };
 
 export default FlowMap;
+

@@ -33,12 +33,7 @@
     overflow-y: auto;
 }
 
-.dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-xl);
-}
+/* dashboard-header handled in index.css */
 
 .action-buttons {
     display: flex;
@@ -90,4 +85,113 @@
 .card-info h3 {
     margin: 0 0 var(--space-xs) 0;
     font-size: var(--font-size-md);
+}
+
+/* Missing project styling */
+.project-card.missing {
+    border-color: var(--color-error);
+    opacity: 0.8;
+    cursor: default;
+}
+
+.project-card.missing:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.missing-badge {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--color-error);
+    color: black;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 4px;
+}
+
+/* Warning Banner */
+.missing-projects-banner {
+    position: fixed;
+    bottom: 0;
+    left: 60px;
+    /* Sidebar width */
+    right: 0;
+    background-color: #fef2f2;
+    border-top: 1px solid #fee2e2;
+    padding: var(--space-md);
+    z-index: 50;
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.05);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+.banner-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.banner-content strong {
+    color: var(--color-error);
+    font-size: 14px;
+}
+
+.missing-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+.missing-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    background: white;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid #fee2e2;
+    font-size: 13px;
+}
+
+.missing-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.missing-actions button {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.missing-actions button:hover {
+    background: var(--color-bg-hover);
+}
+
+.missing-actions button.danger {
+    color: var(--color-error);
+    border-color: #fecaca;
+}
+
+.missing-actions button.danger:hover {
+    background: #fef2f2;
 }

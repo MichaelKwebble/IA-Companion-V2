@@ -26,8 +26,9 @@
 
 .admin-header {
     padding: 24px 32px;
-    background: #111827;
-    color: white;
+    background: #f8fafc;
+    color: black;
+    border-bottom: 1px solid #e5e7eb;
     display: flex;
     justify-content: space-between;
     align-items: center;

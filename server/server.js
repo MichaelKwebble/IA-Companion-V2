@@ -1835,8 +1835,41 @@ app.post('/api/files/create', async (req, res) => {
 // API endpoint to list projects
 app.get('/api/projects', async (req, res) => {
     try {
-        const projects = await loadProjects();
+        const rawProjects = await loadProjects();
+        const projects = await Promise.all(rawProjects.map(async (p) => {
+            if (!p.path) return { ...p, pathExists: true };
+            try {
+                await fs.access(p.path);
+                return { ...p, pathExists: true };
+            } catch (e) {
+                return { ...p, pathExists: false };
+            }
+        }));
         res.json({ success: true, projects });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// API endpoint to update project path
+app.post('/api/projects/:id/update-path', async (req, res) => {
+    const { id } = req.params;
+    const { path: newPath } = req.body;
+
+    if (!newPath) {
+        return res.status(400).json({ success: false, error: 'Path is required' });
+    }
+
+    try {
+        const projects = await loadProjects();
+        const index = projects.findIndex(p => p.id === id);
+        if (index === -1) {
+            return res.status(404).json({ success: false, error: 'Project not found' });
+        }
+
+        projects[index].path = newPath;
+        await saveProjects(projects);
+        res.json({ success: true, project: projects[index] });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

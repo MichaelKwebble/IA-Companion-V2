@@ -1,6 +1,6 @@
 .lesson-toolbar {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
     padding: 12px 24px;
 }
 
@@ -18,13 +18,12 @@
 }
 
 .lesson-badge {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
+    background: #f1f5f9;
+    color: black;
     padding: 6px 12px;
     border-radius: 6px;
     font-size: var(--font-size-sm);
     font-weight: 600;
-    backdrop-filter: blur(10px);
 }
 
 .lesson-actions {
@@ -43,27 +42,26 @@
     font-size: var(--font-size-sm);
     cursor: pointer;
     transition: all 0.2s ease;
-    border: none;
+    border: 1px solid #e5e7eb;
 }
 
 .btn-check-code {
-    background: rgba(255, 255, 255, 0.95);
-    color: #667eea;
+    background: #3b82f6;
+    color: black;
+    /* User requested black text */
 }
 
 .btn-check-code:hover {
-    background: white;
+    background: #2563eb;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .btn-back-to-lesson {
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: white;
+    color: black;
 }
 
 .btn-back-to-lesson:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: #f8fafc;
     transform: translateY(-1px);
 }

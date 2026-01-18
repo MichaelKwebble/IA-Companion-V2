@@ -12,6 +12,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 
 const LoginPage = React.lazy(() => import('./pages/Auth/LoginPage'));
+const SettingsPage = React.lazy(() => import('./pages/Auth/SettingsPage'));
+const UILibrary = React.lazy(() => import('./pages/UILibrary/UILibrary'));
 
 const isProduction = import.meta.env.VITE_APP_MODE === 'production';
 
@@ -39,6 +41,8 @@ function App() {
                   <Route path=":classId/lesson/:lessonId" element={<LectureViewer />} />
                 </Route>
                 <Route path="community" element={<Community />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="ui-library" element={<UILibrary />} />
               </Route>
 
               {/* Fallback */}

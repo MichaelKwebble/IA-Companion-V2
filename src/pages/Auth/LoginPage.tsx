@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { Mail, Lock, Github, Chrome, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Github, Chrome, ArrowRight } from 'lucide-react';
 import './LoginPage.css';
 
 const LoginPage: React.FC = () => {
@@ -113,18 +113,6 @@ const LoginPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="login-visual">
-                <div className="visual-content">
-                    <ShieldCheck size={64} color="#3b82f6" />
-                    <h2>Secure & Seamless</h2>
-                    <p>Your hardware projects, code, and progress synced across all your devices with industry-standard security.</p>
-                </div>
-                <div className="visual-circles">
-                    <div className="circle c1"></div>
-                    <div className="circle c2"></div>
-                    <div className="circle c3"></div>
-                </div>
-            </div>
         </div>
     );
 };

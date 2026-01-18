@@ -812,7 +812,7 @@ const IDELayout: React.FC = () => {
                                 />
                             ))}
                             {activeTab === 'blocks' && (isDesignMode ? <ComponentLibrary /> : <BlockLibrary />)}
-                            {activeTab === 'ai' && <ChatWorkspace isDesignMode={isDesignMode} />}
+                            {activeTab === 'ai' && <ChatWorkspace isDesignMode={isDesignMode} code={code} />}
                             {activeTab === 'examples' && <ExampleBrowser onOpenExample={handleOpenExample} />}
                         </div>
                     </Panel>
