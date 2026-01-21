@@ -167,6 +167,7 @@ const IDELayout: React.FC = () => {
         { id: '3', type: 'button', x: 140, y: 700, width: 295, height: 50, content: 'Connect', style: { backgroundColor: '#3b82f6', color: 'white', borderRadius: '12px', border: 'none' }, name: 'Connect Button' },
     ]);
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+    const [highlightedLines, setHighlightedLines] = useState<number[]>([]);
 
     const selectedDeviceSerial = connectedDevice?.usbSerial || '';
     const [serialInput, setSerialInput] = useState('');
@@ -386,7 +387,6 @@ const IDELayout: React.FC = () => {
                 // setIsDirty(false); // New project, no unsaved changes -> handled by savedCode update?
                 // For new project from example, we should set savedCode to the new code
                 // But here we don't have the code content easily accessible unless we fetch it or the API returns it.
-                // The API returns 'project', but does it return file content?
                 // If not, loadFile will handle it when activeProjectId changes.
             }
         } catch (error) {
@@ -750,7 +750,7 @@ const IDELayout: React.FC = () => {
             <div className="ide-content">
                 <PanelGroup direction="horizontal">
                     {/* Left Sidebar */}
-                    <Panel defaultSize={20} minSize={15} maxSize={30} className="left-panel">
+                    <Panel defaultSize={20} minSize={15} maxSize={45} className="left-panel">
                         <div className="left-panel-tabs">
                             {isDesignMode ? (
                                 <>
@@ -812,7 +812,7 @@ const IDELayout: React.FC = () => {
                                 />
                             ))}
                             {activeTab === 'blocks' && (isDesignMode ? <ComponentLibrary /> : <BlockLibrary />)}
-                            {activeTab === 'ai' && <ChatWorkspace isDesignMode={isDesignMode} code={code} />}
+                            {activeTab === 'ai' && <ChatWorkspace isDesignMode={isDesignMode} code={code} onHighlightLines={setHighlightedLines} />}
                             {activeTab === 'examples' && <ExampleBrowser onOpenExample={handleOpenExample} />}
                         </div>
                     </Panel>
@@ -838,6 +838,7 @@ const IDELayout: React.FC = () => {
                                             code={code}
                                             onChange={setCode}
                                             readOnly={activeProject?.readOnly}
+                                            highlightedLines={highlightedLines}
                                         />
                                     ) : (
                                         <div className="editor-empty-state">

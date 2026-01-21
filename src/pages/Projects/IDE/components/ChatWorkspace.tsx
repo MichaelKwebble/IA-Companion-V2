@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MessageSquare, Plus, Send, ChevronLeft, Edit2, GitMerge, Bot } from 'lucide-react';
+import { MessageSquare, Plus, Send, ChevronLeft, Edit2, GitMerge, Bot, Settings, X, Key } from 'lucide-react';
 import './ChatWorkspace.css';
 import FlowMap from './FlowMap';
 import { parseCodeToFlow } from '../../../../utils/codeFlowParser';
@@ -25,10 +25,12 @@ const MOCK_CHATS: ChatSession[] = [
 interface ChatWorkspaceProps {
     isDesignMode?: boolean;
     code?: string;
+    onHighlightLines?: (lines: number[]) => void;
 }
 
-const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false, code = '' }) => {
+const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false, code = '', onHighlightLines }) => {
     const [mode, setMode] = useState<'agents' | 'flow'>('agents');
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Parse code to generate flowchart data
     const flowData = useMemo(() => {
@@ -36,7 +38,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false, cod
             return { nodes: [], edges: [] };
         }
         return parseCodeToFlow(code);
-    }, [code]);
+    }, [code, refreshTrigger]);
+
+    const handleRefresh = () => {
+        setRefreshTrigger(prev => prev + 1);
+    };
     const [chats, setChats] = useState<ChatSession[]>(MOCK_CHATS);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([
@@ -46,6 +52,22 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false, cod
     const [inputValue, setInputValue] = useState('');
     const [editingChatId, setEditingChatId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState('');
+
+    // Settings modal state
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+    const [tempApiKey, setTempApiKey] = useState('');
+
+    const handleOpenSettings = () => {
+        setTempApiKey(apiKey);
+        setIsSettingsOpen(true);
+    };
+
+    const handleSaveApiKey = () => {
+        setApiKey(tempApiKey);
+        localStorage.setItem('gemini_api_key', tempApiKey);
+        setIsSettingsOpen(false);
+    };
 
     const handleNewChat = () => {
         const newId = Math.random().toString(36).substr(2, 9);
@@ -111,11 +133,55 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ isDesignMode = false, cod
                     >
                         <GitMerge size={14} /> Flow Map
                     </button>
+                    <button
+                        className="settings-btn"
+                        onClick={handleOpenSettings}
+                        title="AI Settings"
+                    >
+                        <Settings size={14} />
+                    </button>
+                </div>
+            )}
+
+            {/* Settings Modal */}
+            {isSettingsOpen && (
+                <div className="settings-modal-overlay" onClick={() => setIsSettingsOpen(false)}>
+                    <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="settings-modal-header">
+                            <h3><Key size={18} /> AI Settings</h3>
+                            <button className="close-btn" onClick={() => setIsSettingsOpen(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="settings-modal-content">
+                            <label htmlFor="gemini-api-key">Gemini API Key</label>
+                            <input
+                                id="gemini-api-key"
+                                type="password"
+                                placeholder="Enter your Gemini API key..."
+                                value={tempApiKey}
+                                onChange={(e) => setTempApiKey(e.target.value)}
+                            />
+                            <p className="api-key-hint">
+                                Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>
+                            </p>
+                        </div>
+                        <div className="settings-modal-footer">
+                            <button className="cancel-btn" onClick={() => setIsSettingsOpen(false)}>Cancel</button>
+                            <button className="save-btn" onClick={handleSaveApiKey}>Save</button>
+                        </div>
+                    </div>
                 </div>
             )}
 
             {mode === 'flow' ? (
-                <FlowMap nodes={flowData.nodes} edges={flowData.edges} />
+                <FlowMap
+                    nodes={flowData.nodes}
+                    edges={flowData.edges}
+                    arrays={flowData.arrays}
+                    onHighlightLines={onHighlightLines}
+                    onRefresh={handleRefresh}
+                />
             ) : (
                 <>
                     {activeChatId && activeChat ? (

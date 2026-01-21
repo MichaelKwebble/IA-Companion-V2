@@ -1,10 +1,11 @@
-import React, { useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 
 interface CodeEditorProps {
     code: string;
     onChange: (newCode: string) => void;
     readOnly?: boolean;
+    highlightedLines?: number[];
 }
 
 export interface CodeEditorHandle {
@@ -12,8 +13,9 @@ export interface CodeEditorHandle {
     redo: () => void;
 }
 
-const CodeEditor = React.memo(forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange, readOnly = false }, ref) => {
+const CodeEditor = React.memo(forwardRef<CodeEditorHandle, CodeEditorProps>(({ code, onChange, readOnly = false, highlightedLines = [] }, ref) => {
     const editorRef = useRef<any>(null);
+    const decorationsRef = useRef<string[]>([]);
 
     useImperativeHandle(ref, () => ({
         undo: () => {
@@ -100,6 +102,28 @@ const CodeEditor = React.memo(forwardRef<CodeEditorHandle, CodeEditorProps>(({ c
         e.preventDefault();
     };
 
+    useEffect(() => {
+        if (!editorRef.current) return;
+
+        const newDecorations = highlightedLines.map(line => ({
+            range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+            options: {
+                isWholeLine: true,
+                className: 'line-highlight',
+                glyphMarginClassName: 'line-highlight-glyph',
+            }
+        }));
+
+        decorationsRef.current = editorRef.current.deltaDecorations(
+            decorationsRef.current,
+            newDecorations
+        );
+
+        if (highlightedLines.length > 0) {
+            editorRef.current.revealLineInCenterIfOutsideViewport(highlightedLines[0]);
+        }
+    }, [highlightedLines]);
+
     return (
         <div
             className="h-full w-full code-editor-container"
@@ -109,6 +133,13 @@ const CodeEditor = React.memo(forwardRef<CodeEditorHandle, CodeEditorProps>(({ c
             <style>{`
         .monaco-editor .margin {
           border-right: 1px solid #E0E0E0;
+        }
+        .line-highlight {
+            background-color: rgba(59, 130, 246, 0.2) !important;
+            border-left: 3px solid #3b82f6;
+        }
+        .line-highlight-glyph {
+            background-color: #3b82f6;
         }
       `}</style>
             <Editor
