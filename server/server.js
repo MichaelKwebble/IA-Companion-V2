@@ -157,6 +157,43 @@ async function runArduinoCLI(args, options = {}) {
     });
 }
 
+// Helper to ensure ESP32 core is installed
+async function ensureDefaultCore() {
+    const ESP32_VERSION = '3.3.3';
+    const ESP32_ID = 'esp32:esp32';
+
+    try {
+        console.log(`[Arduino] Checking for ESP32 core v${ESP32_VERSION}...`);
+
+        // Update index first to ensure we can find the version
+        await runArduinoCLI(['core', 'update-index']);
+
+        const { stdout } = await runArduinoCLI(['core', 'list', '--format', 'json']);
+        const installed = JSON.parse(stdout);
+        const esp32 = installed.find(c => c.id === ESP32_ID);
+
+        if (esp32) {
+            if (esp32.installed === ESP32_VERSION) {
+                console.log(`[Arduino] ESP32 core v${ESP32_VERSION} is already installed.`);
+                return;
+            } else {
+                console.log(`[Arduino] Found ESP32 core v${esp32.installed}, but version ${ESP32_VERSION} is required.`);
+            }
+        } else {
+            console.log(`[Arduino] ESP32 core not found.`);
+        }
+
+        console.log(`[Arduino] Installing ESP32 core v${ESP32_VERSION}... (this may take a few minutes)`);
+
+        // Use spawn to see progress in logs if needed, but for init we'll just wait
+        await runArduinoCLI(['core', 'install', `${ESP32_ID}@${ESP32_VERSION}`]);
+
+        console.log(`[Arduino] ESP32 core v${ESP32_VERSION} installed successfully.`);
+    } catch (e) {
+        console.error(`[Arduino] Failed to ensure ESP32 core: ${e.message}`);
+    }
+}
+
 // Initialize on startup
 initArduinoDirs()
     .then(async () => {
@@ -171,6 +208,9 @@ initArduinoDirs()
                 ARDUINO_ENV[pathKey] = `${BUNDLED_BIN_PATH}${path.delimiter}${process.env[pathKey] || ''}${os.platform() === 'darwin' ? ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' : ''}`;
 
                 console.log(`[Arduino] Found bundled binary at: ${BUNDLED_BIN_FILE}`);
+
+                // Ensure default ESP32 core is installed
+                await ensureDefaultCore();
             } else {
                 // If not found in bundles, check system PATH
                 const cmd = IS_WIN ? 'where' : 'which';
