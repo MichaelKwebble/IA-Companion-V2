@@ -269,7 +269,7 @@ const IDELayout: React.FC = () => {
         console.log('[IDELayout] handleFileSelect called for:', filePath);
         try {
             isLoadingFile.current = true;
-            const response = await fetch(`http://localhost:3001/api/files/read?filePath=${encodeURIComponent(filePath)}&projectId=${projectId || ''}`);
+            const response = await fetch(`http://localhost:3001/api/files/read?filePath=${encodeURIComponent(filePath)}&projectId=${activeProjectId || ''}`);
             const data = await response.json();
             if (data.success) {
                 console.log('[IDELayout] File read success:', filePath);
@@ -286,7 +286,7 @@ const IDELayout: React.FC = () => {
         } finally {
             isLoadingFile.current = false;
         }
-    }, [setCode, setSavedCode, setCurrentFilePath]);
+    }, [setCode, setSavedCode, setCurrentFilePath, activeProjectId]);
 
     // Handle open-file event from Spotlight Search
     React.useEffect(() => {
@@ -469,6 +469,11 @@ const IDELayout: React.FC = () => {
             return;
         }
 
+        if (activeProject?.readOnly) {
+            alert('This example is in preview mode and cannot be saved directly. Save it to your projects first to make changes.');
+            return;
+        }
+
         setSaveStatus('saving');
         try {
             const response = await fetch('http://localhost:3001/api/files/write', {
@@ -625,7 +630,12 @@ const IDELayout: React.FC = () => {
             {/* Main Toolbar */}
             <div className="ide-toolbar">
                 <div className="toolbar-left">
-                    <button className="icon-btn" onClick={handleSave} title="Save File">
+                    <button
+                        className="icon-btn"
+                        onClick={handleSave}
+                        title={activeProject?.readOnly ? "Save Disabled (Preview Mode)" : "Save File"}
+                        style={{ opacity: activeProject?.readOnly ? 0.5 : 1 }}
+                    >
                         <Save size={18} />
                         {isDirty && <div className="save-dot" />}
                     </button>

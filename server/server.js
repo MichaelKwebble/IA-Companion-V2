@@ -141,15 +141,16 @@ network:
 async function runArduinoCLI(args, options = {}) {
     const defaultArgs = ['--config-file', ARDUINO_YAML_PATH];
     const allArgs = [...defaultArgs, ...args];
+    const bin = BUNDLED_BIN_FILE || ARDUINO_BIN_NAME;
 
-    console.log(`[Arduino CLI] Running: arduino-cli ${allArgs.join(' ')}`);
+    console.log(`[Arduino CLI] Running: ${bin} ${allArgs.join(' ')}`);
 
     if (options.spawn) {
-        return spawn(ARDUINO_BIN_NAME, allArgs, { ...options, env: ARDUINO_ENV });
+        return spawn(bin, allArgs, { ...options, env: ARDUINO_ENV });
     }
 
     // Increase maxBuffer to 100MB for large search results (e.g. lib search)
-    return execAsync(`"${ARDUINO_BIN_NAME}" ${allArgs.map(a => `"${a}"`).join(' ')}`, {
+    return execAsync(`"${bin}" ${allArgs.map(a => `"${a}"`).join(' ')}`, {
         ...options,
         maxBuffer: 100 * 1024 * 1024,
         env: ARDUINO_ENV
@@ -164,7 +165,11 @@ initArduinoDirs()
             if (binFile) {
                 BUNDLED_BIN_FILE = binFile;
                 BUNDLED_BIN_PATH = path.dirname(binFile);
-                ARDUINO_ENV.PATH = `${BUNDLED_BIN_PATH}${path.delimiter}${process.env.PATH}${os.platform() === 'darwin' ? ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' : ''}`;
+
+                // Set PATH in ARDUINO_ENV, respecting case sensitivity on Windows
+                const pathKey = Object.keys(ARDUINO_ENV).find(k => k.toUpperCase() === 'PATH') || 'PATH';
+                ARDUINO_ENV[pathKey] = `${BUNDLED_BIN_PATH}${path.delimiter}${process.env[pathKey] || ''}${os.platform() === 'darwin' ? ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' : ''}`;
+
                 console.log(`[Arduino] Found bundled binary at: ${BUNDLED_BIN_FILE}`);
             } else {
                 // If not found in bundles, check system PATH
@@ -789,7 +794,11 @@ async function handleTerminalCommand(command) {
             return;
         }
 
-        const { stdout, stderr } = await execAsync(command, { cwd: currentProjectRoot, timeout: 30000 });
+        const { stdout, stderr } = await execAsync(command, {
+            cwd: currentProjectRoot,
+            timeout: 30000,
+            env: ARDUINO_ENV
+        });
 
         if (stdout) {
             broadcastToClients({
@@ -1558,7 +1567,7 @@ app.post('/api/flash', async (req, res) => {
 
         broadcastToClients({ type: 'flash-status', status: 'compiling', message: 'Compiling...', progress: 10 });
 
-        await runCommandWithProgress('arduino-cli', compileArgs, {
+        await runCommandWithProgress(BUNDLED_BIN_FILE || 'arduino-cli', compileArgs, {
             startProgress: 10,
             endProgress: 40,
             stage: 'Compiling',
@@ -1587,7 +1596,7 @@ app.post('/api/flash', async (req, res) => {
 
                 if (attempt > 1) await sleep(1000); // Small gap between retries
 
-                await runCommandWithProgress('arduino-cli', [
+                await runCommandWithProgress(BUNDLED_BIN_FILE || 'arduino-cli', [
                     'upload',
                     '--config-file', ARDUINO_YAML_PATH,
                     '-p', normalizePortPath(finalPortPath),
