@@ -9,7 +9,6 @@
         "electron/**/*",
         "server/**/*",
         "bin/**/*",
-        "arduino/**/*",
         "package.json"
     ],
     "mac": {
@@ -46,7 +45,6 @@
         "runAfterFinish": true
     },
     "asarUnpack": [
-        "bin/**/*",
-        "arduino/**/*"
+        "bin/**/*"
     ]
 }

@@ -229,7 +229,8 @@ async function ensureDefaultCore() {
 
         const { stdout } = await runArduinoCLI(['core', 'list', '--format', 'json']);
         const installed = JSON.parse(stdout);
-        const esp32 = installed.find(c => c.id === ESP32_ID);
+        const platforms = installed.platforms || (Array.isArray(installed) ? installed : []);
+        const esp32 = platforms.find(c => c.id === ESP32_ID);
 
         if (esp32) {
             if (esp32.installed === ESP32_VERSION) {
@@ -1568,8 +1569,10 @@ app.post('/api/flash', async (req, res) => {
                 }
             }
 
+            let stderrAccumulator = '';
             child.stderr.on('data', (data) => {
                 const output = data.toString();
+                stderrAccumulator += output;
                 console.error(`[Flash] ${stage} stderr: ${output}`);
 
                 // Broadcast as raw arduino log instead of overwriting flash-status message
@@ -1586,6 +1589,7 @@ app.post('/api/flash', async (req, res) => {
                 else {
                     const err = new Error(`Command failed with code ${code}`);
                     err.code = code;
+                    err.stderr = stderrAccumulator; // Attach stderr to error
                     reject(err);
                 }
             });
