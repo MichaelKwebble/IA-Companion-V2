@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import { exec, spawn } from 'child_process';
+import { exec, spawn, execFile } from 'child_process';
 import { promisify } from 'util';
+const execFileAsync = promisify(execFile);
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 import { WebSocketServer } from 'ws';
@@ -24,9 +25,14 @@ const ARDUINO_BIN_NAME = IS_WIN ? 'arduino-cli.exe' : 'arduino-cli';
  * Robust binary path resolver that checks standard and unpacked locations
  */
 async function getBundledBinFile() {
+    // If we're inside an ASAR, we MUST point to the unpacked version
+    // Electron unpacks files under app.asar.unpacked/
+    const isAsar = __dirname.includes('app.asar');
+    const unpackedDir = isAsar ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+
     const possiblePaths = [
         // Standard production path (relative to server.js in resources/app.asar.unpacked/server/)
-        path.join(__dirname, '..', 'bin', ARDUINO_BIN_NAME),
+        path.join(unpackedDir, '..', 'bin', ARDUINO_BIN_NAME),
         // Direct resources path if passed via env
         process.env.RESOURCES_PATH ? path.join(process.env.RESOURCES_PATH, 'bin', ARDUINO_BIN_NAME) : null,
         process.env.RESOURCES_PATH ? path.join(process.env.RESOURCES_PATH, 'app.asar.unpacked', 'bin', ARDUINO_BIN_NAME) : null,
@@ -34,9 +40,12 @@ async function getBundledBinFile() {
         path.join(__dirname, '..', '..', 'bin', ARDUINO_BIN_NAME)
     ].filter(p => p !== null);
 
+    console.log(`[Arduino] Searching for binary in:`, possiblePaths);
+
     for (const p of possiblePaths) {
         try {
             await fs.access(p, fs.constants.X_OK);
+            console.log(`[Arduino] Found executable at: ${p}`);
             return p;
         } catch (e) {
             // Check next path
@@ -143,18 +152,29 @@ async function runArduinoCLI(args, options = {}) {
     const allArgs = [...defaultArgs, ...args];
     const bin = BUNDLED_BIN_FILE || ARDUINO_BIN_NAME;
 
-    console.log(`[Arduino CLI] Running: ${bin} ${allArgs.join(' ')}`);
+    console.log(`[Arduino CLI] Executing: ${bin} ${allArgs.join(' ')}`);
 
     if (options.spawn) {
         return spawn(bin, allArgs, { ...options, env: ARDUINO_ENV });
     }
 
-    // Increase maxBuffer to 100MB for large search results (e.g. lib search)
-    return execAsync(`"${bin}" ${allArgs.map(a => `"${a}"`).join(' ')}`, {
-        ...options,
-        maxBuffer: 100 * 1024 * 1024,
-        env: ARDUINO_ENV
-    });
+    try {
+        // execFile is safer and more reliable than exec (shell)
+        const result = await execFileAsync(bin, allArgs, {
+            ...options,
+            maxBuffer: 100 * 1024 * 1024,
+            env: ARDUINO_ENV
+        });
+        return result;
+    } catch (error) {
+        console.error(`[Arduino CLI] Execution failed:`, {
+            command: `${bin} ${allArgs.join(' ')}`,
+            exitCode: error.code,
+            stderr: error.stderr,
+            message: error.message
+        });
+        throw error;
+    }
 }
 
 // Helper to ensure ESP32 core is installed
