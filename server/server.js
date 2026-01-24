@@ -57,16 +57,42 @@ async function getBundledBinFile() {
 const execAsync = promisify(exec);
 const app = express();
 const PORT = 3001;
+const IS_PROD = process.env.NODE_ENV === 'production';
 const APP_ROOT = process.env.USER_DATA_PATH || path.join(__dirname, '..');
 const PROJECTS_FILE = path.join(APP_ROOT, 'projects.json');
-const ARDUINO_ROOT = path.join(APP_ROOT, 'arduino');
-const ARDUINO_CONFIG_DIR = path.join(ARDUINO_ROOT, 'config');
-const ARDUINO_DATA_DIR = path.join(ARDUINO_ROOT, 'data');
-const ARDUINO_DOWNLOADS_DIR = path.join(ARDUINO_ROOT, 'downloads');
-const ARDUINO_USER_DIR = path.join(ARDUINO_ROOT, 'user');
-const ARDUINO_LIBS_DIR = path.join(ARDUINO_USER_DIR, 'libraries');
-const ARDUINO_SKETCHES_DIR = path.join(ARDUINO_USER_DIR, 'sketches');
-const ARDUINO_YAML_PATH = path.join(ARDUINO_CONFIG_DIR, 'arduino-cli.yaml');
+
+// Handle Bundled Arduino Core
+// In production, we look for 'arduino' in the unpacked resources first
+const isAsar = __dirname.includes('app.asar');
+const unpackedDir = isAsar ? __dirname.replace('app.asar', 'app.asar.unpacked') : __dirname;
+const BUNDLED_ARDUINO_ROOT = path.join(unpackedDir, '..', 'arduino');
+
+// Check if we have a bundled arduino folder (unpacked)
+let effectiveArduinoRoot = path.join(APP_ROOT, 'arduino');
+let dataDirIsBundled = false;
+
+async function resolveArduinoPaths() {
+    if (IS_PROD) {
+        try {
+            await fs.access(BUNDLED_ARDUINO_ROOT);
+            console.log(`[Arduino] Using bundled arduino root at: ${BUNDLED_ARDUINO_ROOT}`);
+            effectiveArduinoRoot = BUNDLED_ARDUINO_ROOT;
+            dataDirIsBundled = true;
+        } catch (e) {
+            console.log(`[Arduino] Bundled arduino root not found at ${BUNDLED_ARDUINO_ROOT}, falling back to writable storage.`);
+        }
+    }
+}
+
+// These will be initialized properly in initArduinoDirs
+let ARDUINO_ROOT = effectiveArduinoRoot;
+let ARDUINO_CONFIG_DIR = path.join(APP_ROOT, 'arduino', 'config'); // Always keep config in writable area
+let ARDUINO_DATA_DIR = path.join(ARDUINO_ROOT, 'data');
+let ARDUINO_DOWNLOADS_DIR = path.join(APP_ROOT, 'arduino', 'downloads'); // Always keep downloads in writable area
+let ARDUINO_USER_DIR = path.join(APP_ROOT, 'arduino', 'user');     // Always keep user files in writable area
+let ARDUINO_LIBS_DIR = path.join(ARDUINO_USER_DIR, 'libraries');
+let ARDUINO_SKETCHES_DIR = path.join(ARDUINO_USER_DIR, 'sketches');
+let ARDUINO_YAML_PATH = path.join(ARDUINO_CONFIG_DIR, 'arduino-cli.yaml');
 
 // Keep track of active flash process for cancellation
 let activeFlashProcess = null;
@@ -102,10 +128,18 @@ let BUNDLED_BIN_FILE = '';
 
 // Ensure Arduino directories exist
 async function initArduinoDirs() {
+    await resolveArduinoPaths();
+
+    // Refresh derived paths based on resolved root
+    ARDUINO_ROOT = effectiveArduinoRoot;
+    ARDUINO_DATA_DIR = path.join(ARDUINO_ROOT, 'data');
+    // Note: Config, Downloads, and User dir ALWAYS stay in writable APP_ROOT/arduino
+    // to ensure settings and user sketches can be saved.
+
     const dirs = [
-        ARDUINO_ROOT,
+        path.join(APP_ROOT, 'arduino'),
         ARDUINO_CONFIG_DIR,
-        ARDUINO_DATA_DIR,
+        path.join(APP_ROOT, 'arduino', 'data'), // Ensure a local data dir exists even if we use bundled
         ARDUINO_DOWNLOADS_DIR,
         ARDUINO_USER_DIR,
         ARDUINO_LIBS_DIR,
@@ -115,6 +149,11 @@ async function initArduinoDirs() {
     for (const dir of dirs) {
         await fs.mkdir(dir, { recursive: true });
     }
+
+    // Update ARDUINO_ENV with resolved paths
+    ARDUINO_ENV.ARDUINO_DIRECTORIES_DATA = sanitizePath(ARDUINO_DATA_DIR);
+    ARDUINO_ENV.ARDUINO_DIRECTORIES_USER = sanitizePath(ARDUINO_USER_DIR);
+    ARDUINO_ENV.ARDUINO_DIRECTORIES_DOWNLOADS = sanitizePath(ARDUINO_DOWNLOADS_DIR);
 
     // Only regenerate arduino-cli.yaml if content differs to avoid triggering restart loops
     const yamlContent = `
